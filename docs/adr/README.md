@@ -1,0 +1,14 @@
+# Architecture Decision Records
+
+- [1. Pluggable Sources, NewPipeExtractor first, sideloaded distribution](0001-pluggable-sources-newpipe-first.md)
+- [2. Vocal removal is a core feature](0002-vocal-removal-in-scope.md)
+- [3. On-device Separation with user-selectable Separation Models](0003-on-device-separation-selectable-models.md)
+- [4. Native Oboe audio engine owns the Session timeline; Monitoring is wired-only and dry](0004-native-oboe-audio-engine.md)
+- [5. Transpose with Signalsmith Stretch, in real time; each Take is bound to its Transpose](0005-transpose-signalsmith-realtime.md)
+- [6. Lyrics from LRCLIB behind a LyricsProvider; line-synced with interpolated word progress](0006-lyrics-lrclib-line-synced.md)
+- [7. Many Takes per Track; non-destructive Mix of one Instrumental and one Take](0007-takes-and-non-destructive-mix.md)
+- [8. Storage formats and Export (WAV, MP3 via LAME, M4A/AAC via MediaCodec)](0008-storage-and-export.md)
+- [9. Session workflow: start anywhere, countdown, practice loop, guide vocal, review](0009-session-workflow.md)
+- [10. Track identity and processing pipeline](0010-track-identity-and-pipeline.md)
+- [11. Project license: GPL-3.0](0011-license-gpl-3.md)
+- [12. Platform baseline: Android 10+ (minSdk 29), arm64-v8a](0012-platform-baseline.md)
