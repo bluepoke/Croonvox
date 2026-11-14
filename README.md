@@ -33,7 +33,7 @@ Modules:
 
 ## Documentation
 
-- [`CONTEXT.md`](CONTEXT.md): domain glossary (Track, Take, Mix, Session, Separation, …)
+- [`GLOSSARY.md`](GLOSSARY.md): domain glossary (Track, Take, Mix, Session, Separation, …)
 - [`docs/adr/`](docs/adr/README.md): architecture decision records
 
 ## Building
