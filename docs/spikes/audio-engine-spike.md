@@ -85,27 +85,30 @@ Run every step for each **device × route** you care about. Routes: built-in spe
 
 Copy one block per device. Leave cells empty when a measurement wasn't taken.
 
-### Device: _model_ · Android _version_ · build _git sha_
+### Device: Galaxy Tab S6 lite (2022) · Android 14 · build da87d83
 
 | | Speaker | Wired | USB | Bluetooth |
 |---|---|---|---|---|
-| API / rate / burst / buffer | | | | |
-| Exclusive out/in · LowLatency out/in | | | | |
-| Reported round trip (ms) | | | | |
-| Measured round trip, 3 runs (ms) | | | | |
-| Clicks detected (of 8) | | | | |
-| Monitoring feel (1–5) | n/a | | | n/a |
+| API / rate / burst / buffer | AAudio / 48000 Hz / 192 / 384 | AAudio / 48000 Hz / 192 / 384 | | |
+| Exclusive out/in · LowLatency out/in | no / no · yes / yes | no / no · yes / yes | | |
+| Reported round trip (ms) | 84.1 | n/a | | |
+| Measured round trip, 3 runs (ms) | 82.5 | 83 | | |
+| Clicks detected (of 8) | 8 | 8 | | |
+| Monitoring feel (1–5, 5 = best) | n/a | 3 (closed headphones; 4 with open) | | n/a |
 | Take alignment offset, mean (ms) | | | | |
 | Drift over 20 s (ms) | | | | |
-| Transpose: glitch on change? artifacts? | | | | |
-| XRuns out / in in 3 min (Transpose + Monitoring) | | | | |
-| Input shortfalls in 3 min | | | | |
-| Callback CPU peak (%) | | | | |
-| Route change: OK? | | | | |
+| Transpose: glitch on change? artifacts? | no | no | | |
+| XRuns out / in in 3 min (Transpose + Monitoring) | 0 / 0 | 1 / 0 | | |
+| Input shortfalls in 3 min | | 0 | | |
+| Callback CPU peak (%) | | 70 | | |
+| Route change: OK? | yes | yes | | |
 
 Notes:
 
--
+- Streams are shared, not exclusive (no MMAP path), on every route. Burst and buffer (192 / 384 frames ≈ 12 ms) explain only a fraction of the ≈ 83 ms round trip; the rest is the platform audio pipeline.
+- Measured round trip on the speaker (82.5 ms) matches Oboe's reported value (84.1 ms), and all 8 clicks were detected. Oboe could not report the latency on the wired route (n/a); the measured value is still available.
+- Monitoring at ≈ 83 ms was rated 3 ("noticeable but OK") with closed headphones and 4 with open ones. The open headphones let the direct sound of the voice mask the delayed copy. This is better than expected for this latency.
+- 1 output xrun on wired in 3 min (pass criterion: 0).
 
 ## Conclusions
 
