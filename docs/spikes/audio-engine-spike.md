@@ -124,12 +124,16 @@ Notes:
 
 ## Conclusions
 
-_Fill in after measuring at least two devices._
+Based on **one device**, the Galaxy Tab S6 Lite (2022): shared streams, the weak end of the target range. No low-latency device was available. A follow-up issue tracks measuring one.
 
-- Is the ≤ 30 ms wired/USB round trip met? If not, what's the buffer/burst floor?
-- Is the click calibration repeatable enough to be the production approach, or do we need a loopback-only mode?
-- Can Signalsmith `presetCheaper` + Monitoring run without xruns on the weakest target device? Should production use `presetDefault`?
-- Changes needed to ADR 4 / ADR 5 (if any):
+- **≤ 30 ms wired/USB round trip: not met** (83 ms wired, 60 ms USB). AAudio grants only shared streams, and the platform pipeline accounts for about 70 ms beyond the 12 ms of burst + buffer. The app can't fix this, so Monitoring is no longer gated on a latency target.
+- **Monitoring is still usable at about 83 ms** (rated 3 of 5 with closed headphones). Hardware Monitoring on a USB mic is better than any software Monitoring on this device.
+- **Click calibration works**: it matches the reported latency, and with it applied, loopback Takes align within −3 to 0 ms with no drift on a single device. Repeatability across 3 runs was not recorded.
+- **An xrun shifts the rest of a Take by one burst** (+4.0 ms step on wired; most likely an xrun). Production must align Takes using timestamps or xrun correction, not callback counting.
+- **Transpose + Monitoring peaked at 70 % CPU** with 1 xrun in 3 min, so there's too little headroom on this chip. Production needs a callback load ≤ 50 %, using a larger Session buffer or a lighter configuration if needed. Transpose itself had no audible glitches on change (ADR 5 holds).
+- **Clapping can't measure alignment** (humans clap ahead of the beat). The protocol now uses acoustic loopback.
+- **ADR changes:** [ADR 13](../adr/0013-monitoring-and-take-alignment-after-engine-spike.md) amends ADR 4. ADR 5 is unchanged.
+- **Not measured:** Bluetooth route, Monitoring on a low-latency device, input and output on separate devices (two clocks), 3-run calibration repeatability.
 
 ## Known spike shortcuts (not to be copied into production)
 

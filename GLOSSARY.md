@@ -19,7 +19,8 @@ Ubiquitous language for the project. Decisions are recorded in `docs/adr/`.
 | **Practice Loop** | A–B section looped without recording, for learning a passage. |
 | **Guide Vocal** | The Vocal Stem blended into the headphones (Session) or into a Mix at low level. Never recorded. |
 | **Review** | Post-recording playback of a Take with Keep / Discard / Record again. |
-| **Monitoring** | Optional, dry, real-time routing of the mic to **wired/USB** headphones during a Session. Never over Bluetooth. See ADR 4. |
+| **Monitoring** | Optional, dry, real-time software routing of the mic to **wired/USB** headphones during a Session. Never over Bluetooth. Warns when the measured round trip is high. See ADR 4, ADR 13. |
+| **Hardware Monitoring** | Zero-latency monitoring done by the audio interface itself (e.g. a USB mic's headphone jack), outside the app. Preferred over Monitoring when available. |
 | **Audio Engine** | Native (C++/Oboe) component that owns the Session timeline: playback, Transpose, capture, Monitoring. |
 | **Latency Calibration** | Per-device/route measurement of the input/output offset, applied to Takes so they align. |
 | **Transpose** | Pitch-shift of Backing Audio (and guide Vocal Stem) by −6…+6 semitones, tempo unchanged. A property of each Take. See ADR 5. |

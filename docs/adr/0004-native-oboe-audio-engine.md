@@ -1,6 +1,6 @@
 # 4. Native Oboe audio engine owns the Session timeline; Monitoring is wired-only and dry
 
-- Status: Accepted
+- Status: Accepted, amended by [ADR 13](0013-monitoring-and-take-alignment-after-engine-spike.md) (latency warning instead of a latency target, Hardware Monitoring hint, timestamp-based Take alignment)
 - Date: 2026-11-14
 
 ## Context
