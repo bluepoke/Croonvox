@@ -1,0 +1,66 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "ccff94273ec89a8f36797960076866fb",
+    "entities": [
+      {
+        "tableName": "tracks",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`source` TEXT NOT NULL, `source_track_id` TEXT NOT NULL, `title` TEXT NOT NULL, `artist` TEXT, `duration_ms` INTEGER, `pipeline_state` TEXT NOT NULL, `added_at` INTEGER NOT NULL, PRIMARY KEY(`source`, `source_track_id`))",
+        "fields": [
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceTrackId",
+            "columnName": "source_track_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "artist",
+            "columnName": "artist",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "durationMs",
+            "columnName": "duration_ms",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "pipelineState",
+            "columnName": "pipeline_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "addedAt",
+            "columnName": "added_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "source",
+            "source_track_id"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'ccff94273ec89a8f36797960076866fb')"
+    ]
+  }
+}

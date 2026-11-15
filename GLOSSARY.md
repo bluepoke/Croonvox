@@ -4,7 +4,7 @@ Ubiquitous language for the project. Decisions are recorded in `docs/adr/`.
 
 | Term | Meaning |
 |---|---|
-| **Source** | A pluggable provider of songs: *search → candidates → resolve to stream/file*. Implementations: NewPipe-based (network), Local File. See ADR 1. |
+| **Source** | A pluggable provider of songs: *search → candidates → resolve to stream/file*. One Source per service: each service behind the NewPipe adapter (YouTube, SoundCloud, …) is its own Source, plus the Local File Source. Its name is the namespace of Track identities (`youtube:<id>`). See ADR 1, ADR 10. |
 | **Track** | A song the user added, identified by Source + source ID. Owns Original Audio, stems per Separation Model, optional video, metadata, Lyrics, Takes and Mixes. See ADR 10. |
 | **Track Pipeline** | Resumable processing states: Added → Downloading → Downloaded → Separating(model) → Ready / Failed. |
 | **Original Audio** | The full audio extracted from a music video, including the original vocals. |

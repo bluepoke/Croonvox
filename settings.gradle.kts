@@ -17,6 +17,8 @@ dependencyResolutionManagement {
 rootProject.name = "croonvox"
 
 include(":app")
+include(":core")
+include(":data")
 include(":engine")
 
 // Throwaway spikes (not shipped).

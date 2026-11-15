@@ -28,7 +28,9 @@ An Android karaoke and singing-practice app. Find a music video, remove the voca
 
 Modules:
 
-- `app`: Android application (UI)
+- `core`: domain core in pure Kotlin (model, use cases, and the ports `Source`, `Separator`, `LyricsProvider`, `AudioEngine`); its test fixtures hold in-memory fakes for every port
+- `data`: Room database and app-private file store, implementing the core's interfaces
+- `app`: Android application (UI, wiring), in two flavors: `network` (with network Sources) and `local` (Local File Source only, Play-Store-safe; see ADR 1)
 - `engine`: native Audio Engine (C++ via CMake and the NDK)
 - `spikes/*`: throwaway spikes that validate ADRs on hardware (e.g. [`audio-engine`](docs/spikes/audio-engine-spike.md)); not shipped
 
@@ -47,8 +49,12 @@ Requirements:
 AGP downloads the NDK and CMake automatically on first build. CMake fetches Signalsmith Stretch from GitHub, so the first build needs network access.
 
 ```sh
-./gradlew assembleDebug
+./gradlew assembleNetworkDebug assembleLocalDebug   # both flavors
+./gradlew installNetworkDebug                       # install on a connected device
+./gradlew test                                      # unit tests (domain core on the JVM)
 ```
+
+CI (GitHub Actions) runs the same build and tests on every push and pull request.
 
 Without Android Studio's environment, point Gradle at a JDK first, for example its bundled runtime:
 
