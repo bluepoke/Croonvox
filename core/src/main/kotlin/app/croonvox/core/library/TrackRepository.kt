@@ -2,15 +2,25 @@
 package app.croonvox.core.library
 
 import app.croonvox.core.model.Track
+import app.croonvox.core.model.TrackId
+import app.croonvox.core.model.TrackPipelineState
 import kotlinx.coroutines.flow.Flow
 
 /** Persistence of Tracks. Implemented by the data layer (Room); faked in tests. */
 interface TrackRepository {
     fun observeAll(): Flow<List<Track>>
 
+    /** The Track with [id], updated as it changes; `null` while it doesn't exist. */
+    fun observe(id: TrackId): Flow<Track?>
+
+    suspend fun get(id: TrackId): Track?
+
     /**
      * Stores [track] unless a Track with the same identity exists; returns the stored Track
      * (the existing one, or [track]). Must be atomic.
      */
     suspend fun addIfAbsent(track: Track): Track
+
+    /** Sets the Track Pipeline state of an existing Track and returns the updated Track. */
+    suspend fun updatePipeline(id: TrackId, state: TrackPipelineState): Track
 }

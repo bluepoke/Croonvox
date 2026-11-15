@@ -1,0 +1,14 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+package app.croonvox.core.testing
+
+import app.croonvox.core.port.LocalFile
+import java.io.ByteArrayInputStream
+import java.io.InputStream
+
+/** A picked/shared file with in-memory [content]; equal content means the same Track. */
+class FakeLocalFile(
+    override val displayName: String?,
+    private val content: String,
+) : LocalFile {
+    override fun open(): InputStream = ByteArrayInputStream(content.toByteArray())
+}

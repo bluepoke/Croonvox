@@ -39,11 +39,13 @@ internal fun TrackEntity.toTrack() = Track(
 )
 
 // Stored as stable strings so enum/class renames don't corrupt data.
-private fun TrackPipelineState.toColumn(): String = when (this) {
+internal fun TrackPipelineState.toColumn(): String = when (this) {
     TrackPipelineState.Added -> "added"
+    TrackPipelineState.Downloaded -> "downloaded"
 }
 
 private fun pipelineStateFromColumn(value: String): TrackPipelineState = when (value) {
     "added" -> TrackPipelineState.Added
+    "downloaded" -> TrackPipelineState.Downloaded
     else -> error("unknown pipeline state '$value'")
 }

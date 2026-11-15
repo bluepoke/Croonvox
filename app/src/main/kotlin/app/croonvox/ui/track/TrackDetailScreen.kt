@@ -1,0 +1,124 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+package app.croonvox.ui.track
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
+import app.croonvox.core.library.TrackRepository
+import app.croonvox.core.model.TrackId
+import app.croonvox.core.player.TrackPlayer
+import app.croonvox.core.port.Playback
+import app.croonvox.ui.subtitle
+
+@Composable
+fun TrackDetailRoute(id: TrackId, tracks: TrackRepository, player: TrackPlayer) {
+    val viewModel: TrackDetailViewModel = viewModel(
+        factory = viewModelFactory { initializer { TrackDetailViewModel(id, tracks, player) } },
+    )
+    val track by viewModel.track.collectAsStateWithLifecycle()
+    val playback by viewModel.playback.collectAsStateWithLifecycle()
+    val ready by viewModel.ready.collectAsStateWithLifecycle()
+    val loadProgress by viewModel.loadProgress.collectAsStateWithLifecycle()
+    val error by viewModel.error.collectAsStateWithLifecycle()
+    TrackDetailScreen(
+        title = track?.title ?: "",
+        subtitle = track?.subtitle().orEmpty(),
+        playback = playback,
+        ready = ready,
+        loadProgress = loadProgress,
+        error = error,
+        onTogglePlay = viewModel::togglePlay,
+        onSeek = viewModel::seekTo,
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TrackDetailScreen(
+    title: String,
+    subtitle: String,
+    playback: Playback,
+    ready: Boolean,
+    loadProgress: Float,
+    error: String?,
+    onTogglePlay: () -> Unit,
+    onSeek: (Long) -> Unit,
+) {
+    Scaffold(topBar = { TopAppBar(title = { Text(title, maxLines = 1) }) }) { padding ->
+        Column(
+            modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            if (subtitle.isNotEmpty()) {
+                Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            when {
+                error != null -> Text("Can't play this Track: $error", color = MaterialTheme.colorScheme.error)
+                !ready -> {
+                    Text("Preparing audio… ${(loadProgress * 100).toInt()} %", style = MaterialTheme.typography.bodyMedium)
+                    LinearProgressIndicator(progress = { loadProgress }, modifier = Modifier.fillMaxWidth())
+                }
+                else -> PlaybackControls(playback, onTogglePlay, onSeek)
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlaybackControls(playback: Playback, onTogglePlay: () -> Unit, onSeek: (Long) -> Unit) {
+    // While dragging, show the thumb where the finger is; seek once on release.
+    var dragMs by remember { mutableStateOf<Float?>(null) }
+    val duration = playback.durationMs.coerceAtLeast(1).toFloat()
+    Slider(
+        value = dragMs ?: playback.positionMs.toFloat().coerceIn(0f, duration),
+        onValueChange = { dragMs = it },
+        onValueChangeFinished = {
+            dragMs?.let { onSeek(it.toLong()) }
+            dragMs = null
+        },
+        valueRange = 0f..duration,
+        modifier = Modifier.fillMaxWidth(),
+    )
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(formatTime(dragMs?.toLong() ?: playback.positionMs), style = MaterialTheme.typography.bodySmall)
+        Text(formatTime(playback.durationMs), style = MaterialTheme.typography.bodySmall)
+    }
+    if (playback.bufferedMs < playback.durationMs) {
+        // Still decoding in the background; playback beyond this point waits for it.
+        val buffered = playback.bufferedMs.toFloat() / duration
+        LinearProgressIndicator(progress = { buffered }, modifier = Modifier.fillMaxWidth())
+        Text(
+            "Preparing the rest of the song… ${(buffered * 100).toInt()} %",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+    Button(onClick = onTogglePlay) { Text(if (playback.playing) "Pause" else "Play") }
+}
+
+private fun formatTime(ms: Long): String {
+    val totalSeconds = ms / 1000
+    return "%d:%02d".format(totalSeconds / 60, totalSeconds % 60)
+}

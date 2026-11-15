@@ -3,22 +3,38 @@ package app.croonvox
 
 import android.content.Context
 import androidx.work.WorkManager
+import app.croonvox.core.library.ImportLocalFile
 import app.croonvox.core.library.Library
 import app.croonvox.core.library.TrackFiles
 import app.croonvox.core.library.TrackRepository
+import app.croonvox.core.player.TrackPlayer
+import app.croonvox.core.port.AudioEngine
 import app.croonvox.data.AppTrackFiles
 import app.croonvox.data.CroonvoxDatabase
 import app.croonvox.data.RoomTrackRepository
+import app.croonvox.engine.OboeAudioEngine
+import app.croonvox.importing.Importer
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import java.io.File
 
 /**
  * Manual dependency injection: the one place that wires adapters to the domain core.
- * Everything is created lazily on first use.
+ * Everything is created lazily on first use and lives as long as the process.
  */
 class AppContainer(private val context: Context) {
+    /** Work that must outlive any screen (e.g. imports). */
+    val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
     val database: CroonvoxDatabase by lazy { CroonvoxDatabase.create(context) }
     val trackRepository: TrackRepository by lazy { RoomTrackRepository(database) }
     val trackFiles: TrackFiles by lazy { AppTrackFiles(File(context.filesDir, "tracks")) }
     val workManager: WorkManager by lazy { WorkManager.getInstance(context) }
+    val audioEngine: AudioEngine by lazy { OboeAudioEngine() }
+
     val library: Library by lazy { Library(trackRepository) }
+    val importLocalFile: ImportLocalFile by lazy { ImportLocalFile(trackRepository, trackFiles) }
+    val trackPlayer: TrackPlayer by lazy { TrackPlayer(trackRepository, trackFiles, audioEngine) }
+    val importer: Importer by lazy { Importer(appScope, importLocalFile, trackFiles, context.contentResolver) }
 }

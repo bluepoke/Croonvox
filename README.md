@@ -64,6 +64,11 @@ export JAVA_HOME=/path/to/android-studio/jbr
 
 Target platform: Android 10+ (minSdk 29), `arm64-v8a` (plus `x86_64` for the emulator).
 
+## Known limitations
+
+- Playback decodes the whole Original Audio into memory (float stereo, about 11.5 MB per minute at 48 kHz). That's fine for songs, but long videos use a lot of memory. Streaming from disk comes with the stored-stems work (ADR 8).
+- A file the device can't decode is still imported as a Downloaded Track; it fails when played. A Failed pipeline state comes with the download pipeline. If decoding fails part-way through a file, the part decoded so far stays playable.
+
 ## Distribution
 
 Croonvox is distributed outside the Google Play Store (GitHub releases / F-Droid), because extracting audio from streaming platforms conflicts with Play policies. You are responsible for complying with the terms of the platforms you use and with copyright law.

@@ -21,10 +21,18 @@ data class TrackId(val source: SourceId, val sourceTrackId: String) {
  * NewPipe adapter is its own Source, so the ID namespace is the service, not the library.
  */
 @JvmInline
-value class SourceId(val value: String)
+value class SourceId(val value: String) {
+    companion object {
+        /** Files imported from the device; their source ID is the content hash (ADR 10). */
+        val Local = SourceId("local")
+    }
+}
 
 /** Where a Track is in its processing (GLOSSARY: Track Pipeline, ADR 10). */
 sealed interface TrackPipelineState {
     /** Known to the Library; nothing downloaded yet. */
     data object Added : TrackPipelineState
+
+    /** Original Audio is stored locally; a Session can start (ADR 10). */
+    data object Downloaded : TrackPipelineState
 }

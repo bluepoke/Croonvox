@@ -37,5 +37,7 @@ android {
 }
 
 dependencies {
+    api(project(":core"))
     implementation(libs.oboe)
+    implementation(libs.kotlinx.coroutines.android)
 }

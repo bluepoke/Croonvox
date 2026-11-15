@@ -3,6 +3,7 @@ package app.croonvox.core.testing
 
 import app.croonvox.core.model.AudioFile
 import app.croonvox.core.port.AudioEngine
+import app.croonvox.core.port.LoadId
 import app.croonvox.core.port.Playback
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -13,8 +14,17 @@ class FakeAudioEngine(private val durationsMs: Map<AudioFile, Long> = emptyMap()
     private val state = MutableStateFlow(Playback.Idle)
     override val playback: StateFlow<Playback> = state
 
-    override suspend fun load(backingAudio: AudioFile) {
-        state.value = Playback(backingAudio, playing = false, positionMs = 0, durationMs = durationsMs[backingAudio] ?: 0)
+    private var current = LoadId(0)
+
+    override suspend fun load(audio: AudioFile, onProgress: (Float) -> Unit): LoadId {
+        listOf(0f, 0.5f, 1f).forEach(onProgress)
+        state.value = Playback(audio, playing = false, positionMs = 0, durationMs = durationsMs[audio] ?: 0)
+        current = LoadId(current.value + 1)
+        return current
+    }
+
+    override fun unload(load: LoadId) {
+        if (load == current) state.value = Playback.Idle
     }
 
     override fun play() {

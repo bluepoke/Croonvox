@@ -3,6 +3,8 @@ package app.croonvox.data
 
 import app.croonvox.core.library.TrackRepository
 import app.croonvox.core.model.Track
+import app.croonvox.core.model.TrackId
+import app.croonvox.core.model.TrackPipelineState
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -15,5 +17,13 @@ class RoomTrackRepository(
 
     override fun observeAll(): Flow<List<Track>> = dao.observeAll().map { rows -> rows.map { it.toTrack() } }
 
+    override fun observe(id: TrackId): Flow<Track?> =
+        dao.observe(id.source.value, id.sourceTrackId).map { it?.toTrack() }
+
+    override suspend fun get(id: TrackId): Track? = dao.get(id.source.value, id.sourceTrackId)?.toTrack()
+
     override suspend fun addIfAbsent(track: Track): Track = dao.insertIfAbsent(track.toEntity(clock())).toTrack()
+
+    override suspend fun updatePipeline(id: TrackId, state: TrackPipelineState): Track =
+        dao.updatePipelineState(id.source.value, id.sourceTrackId, state.toColumn()).toTrack()
 }

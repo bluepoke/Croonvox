@@ -19,10 +19,11 @@ FetchContent_MakeAvailable(signalsmith-stretch)
 find_package(oboe REQUIRED CONFIG)
 
 add_library(croonvox_engine SHARED
-        croonvox_engine.cpp
+        PlaybackEngine.cpp
+        jni_bridge.cpp
 )
 
 target_link_libraries(croonvox_engine PRIVATE oboe::oboe signalsmith-stretch log android)
 
 # Signalsmith Stretch is ~10x slower unoptimised; keep DSP optimised even in debug builds.
-target_compile_options(croonvox_engine PRIVATE -O2 -Wall -Wextra)
+target_compile_options(croonvox_engine PRIVATE -O2 -Wall -Wextra -Wno-unused-parameter)

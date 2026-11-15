@@ -4,10 +4,11 @@ Ubiquitous language for the project. Decisions are recorded in `docs/adr/`.
 
 | Term | Meaning |
 |---|---|
-| **Source** | A pluggable provider of songs: *search → candidates → resolve to stream/file*. One Source per service: each service behind the NewPipe adapter (YouTube, SoundCloud, …) is its own Source, plus the Local File Source. Its name is the namespace of Track identities (`youtube:<id>`). See ADR 1, ADR 10. |
+| **Source** | A pluggable provider of songs: *search → candidates → resolve to stream/file*. One Source per service: each service behind the NewPipe adapter (YouTube, SoundCloud, …) is its own Source. Its name is the namespace of Track identities (`youtube:<id>`). See ADR 1, ADR 10. |
+| **Local File Source** | Files the user picks or shares into the app. Not searched: the file is *imported* (copied as Original Audio), and its identity is `local:<SHA-256 of the content>`, so the same content always maps to the same Track. |
 | **Track** | A song the user added, identified by Source + source ID. Owns Original Audio, stems per Separation Model, optional video, metadata, Lyrics, Takes and Mixes. See ADR 10. |
 | **Track Pipeline** | Resumable processing states: Added → Downloading → Downloaded → Separating(model) → Ready / Failed. |
-| **Original Audio** | The full audio extracted from a music video, including the original vocals. |
+| **Original Audio** | A Track's full audio as obtained, including the original vocals: downloaded from a Source (e.g. a music video's audio stream) or an imported local file (audio or video), kept as is. |
 | **Separation** | ML source separation of Original Audio into an Instrumental and a Vocal Stem. See ADR 2. |
 | **Separation Model** | A selectable on-device ML model used for Separation; the user trades speed vs. quality. See ADR 3. |
 | **Instrumental** | Original Audio with the lead vocal removed; the default playback layer in a Session. |
