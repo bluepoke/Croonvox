@@ -138,3 +138,4 @@ fabric.properties
 ### Croonvox ###
 .cxx/
 .kotlin/
+/spike-wavs/

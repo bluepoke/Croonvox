@@ -55,12 +55,19 @@ Run every step for each **device × route** you care about. Routes: built-in spe
 
 ### 4. Alignment of Takes
 
-1. Calibrate the route you're testing.
-2. Load the **Test tone** and **Record** about 20 s, clapping or saying "ta" exactly on each click.
-3. Tap **Review** and listen: claps should land on the clicks.
-4. **Save alignment WAV**, pull it, and open it in an editor (Audacity etc.). Measure the offset between the click onsets (left channel) and the clap onsets (right channel) at several points.
+1. Calibrate the route you're testing. Turn Monitoring off, and turn off any hardware monitoring on the interface (or turn the headphone volume down) to avoid a feedback howl.
+2. Load the **Test tone** and **Record** about 20 s while holding an earpiece against the mic, so the Take records the clicks themselves (acoustic loopback).
+   Don't clap along: people clap 20–50 ms ahead of a regular click, and their tempo wanders, which hides the system's real offset and drift.
+3. Tap **Review** and listen: the recorded clicks should sit on the played clicks.
+4. **Save alignment WAV**, pull it, and analyse it:
+   ```sh
+   adb pull /sdcard/Android/data/app.croonvox.spike.audio/files/Music/ ./spike-wavs/
+   python3 spikes/audio-engine/tools/analyze_alignment.py spike-wavs/Music/alignment-wired-<timestamp>.wav
+   ```
+   The script pairs every click (left channel) with the nearest recorded click or clap (right channel) and prints the **mean offset** (positive = Take is late), any **steps** (sudden jumps such as a burst lost in an xrun), and the **drift over 20 s** (a linear fit of the offsets over time, between steps). Add `-v` to list every pair.
+   *Manual alternative:* in Audacity, zoom in on a click and the clap next to it, select from one onset to the other, and read the selection length (set the selection toolbar to milliseconds). Do this for the first 3 and last 3 claps. The mean is the offset; last-3 mean minus first-3 mean is the drift.
 
-**Pass:** the mean offset is within ±10 ms, which is human clapping error. There's no drift between the start and end of the Take.
+**Pass (loopback):** the mean offset is within ±5 ms, drift over 20 s is under 2 ms, and there are no steps. If you have to clap instead, only the drift is meaningful, and only roughly.
 
 ### 5. Transpose
 
@@ -87,21 +94,21 @@ Copy one block per device. Leave cells empty when a measurement wasn't taken.
 
 ### Device: Galaxy Tab S6 lite (2022) · Android 14 · build da87d83
 
-| | Speaker | Wired | USB | Bluetooth |
+| | Speaker | Wired | USB-Microphone with wired closed Headphones | Bluetooth |
 |---|---|---|---|---|
-| API / rate / burst / buffer | AAudio / 48000 Hz / 192 / 384 | AAudio / 48000 Hz / 192 / 384 | | |
-| Exclusive out/in · LowLatency out/in | no / no · yes / yes | no / no · yes / yes | | |
-| Reported round trip (ms) | 84.1 | n/a | | |
-| Measured round trip, 3 runs (ms) | 82.5 | 83 | | |
-| Clicks detected (of 8) | 8 | 8 | | |
-| Monitoring feel (1–5, 5 = best) | n/a | 3 (closed headphones; 4 with open) | | n/a |
-| Take alignment offset, mean (ms) | | | | |
-| Drift over 20 s (ms) | | | | |
+| API / rate / burst / buffer | AAudio / 48000 Hz / 192 / 384 | AAudio / 48000 Hz / 192 / 384 | AAudio / 48000 Hz / 192 / 384 | |
+| Exclusive out/in · LowLatency out/in | no / no · yes / yes | no / no · yes / yes | no / no · yes / yes | |
+| Reported round trip (ms) | 84.1 | n/a | n/a | |
+| Measured round trip, 3 runs (ms) | 82.5 | 83 | 60.2 | |
+| Clicks detected (of 8) | 8 | 8 | 8 | |
+| Monitoring feel (1–5, 5 = best) | n/a | 3 (closed headphones; 4 with open) | 5, but masked by the AK-60's hardware monitoring (see notes) | n/a |
+| Take alignment offset, mean (ms) | | 0.0, then +4.0 after one step (loopback) | −3.0 (loopback; stdev 0.0) | |
+| Drift over 20 s (ms) | | 0.0 between steps; **1 step of +4.0 ms** at 7.5 s | 0.0 (loopback, 21 s) | |
 | Transpose: glitch on change? artifacts? | no | no | | |
-| XRuns out / in in 3 min (Transpose + Monitoring) | 0 / 0 | 1 / 0 | | |
+| XRuns out / in in 3 min (Transpose + Monitoring) | 0 / 0 | 1 / 0 | 0 / 0 | |
 | Input shortfalls in 3 min | | 0 | | |
 | Callback CPU peak (%) | | 70 | | |
-| Route change: OK? | yes | yes | | |
+| Route change: OK? | yes | yes | yes | |
 
 Notes:
 
@@ -109,6 +116,11 @@ Notes:
 - Measured round trip on the speaker (82.5 ms) matches Oboe's reported value (84.1 ms), and all 8 clicks were detected. Oboe could not report the latency on the wired route (n/a); the measured value is still available.
 - Monitoring at ≈ 83 ms was rated 3 ("noticeable but OK") with closed headphones and 4 with open ones. The open headphones let the direct sound of the voice mask the delayed copy. This is better than expected for this latency.
 - 1 output xrun on wired in 3 min (pass criterion: 0).
+- USB column: Aokeo AK-60 USB microphone, closed headphones plugged into the **AK-60's headphone jack**. Output and input therefore both go through the USB device. Round trip 60.2 ms.
+- The AK-60 has zero-latency hardware monitoring on its headphone jack. With the spike's Monitoring on, both are audible. The hardware path masks the 60 ms software copy, so the "5" rates the hardware monitoring, not the spike's. The AK-60's hardware monitoring cannot be switched off, so the spike's Monitoring is not measurable with this mic.
+- Take alignment on USB, first measured by clapping: −38.4 ms mean, +22.1 ms drift over 20 s. An acoustic loopback re-test (earpiece held against the mic, no human timing) gave **−3.0 ms mean, 0.5 ms stdev, −0.4 ms drift**. So the system aligns Takes correctly and does not drift. The clapping result was human timing: negative mean asynchrony, plus tempo wander that happened to look linear. Clapping is therefore unsuitable for this measurement, and step 4 now uses loopback by default. (Values re-analysed after the script started ignoring onsets in the first 50 ms of the file.)
+- Callback CPU peak on wired with Transpose + Monitoring: 70 %, exactly at the pass limit.
+- Wired loopback: the Take is aligned at exactly 0.0 ms, then **jumps by +4.0 ms at 7.5 s** and stays there. 4.0 ms at 48 kHz is 192 frames, exactly one burst. There is no continuous drift. The most likely cause is an xrun: an output underrun delays all later output by one burst, or an input overrun drops one. The spike's timeline counts callbacks, so it can't see the slip, and every xrun permanently shifts the rest of the Take by one burst. **Production consequence (ADR 4):** align Takes using stream timestamps (frame position + time from `getTimestamp`) rather than callback counting, or at least detect xruns and correct the Take index by the lost frames.
 
 ## Conclusions
 
