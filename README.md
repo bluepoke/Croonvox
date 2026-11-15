@@ -30,6 +30,7 @@ Modules:
 
 - `app`: Android application (UI)
 - `engine`: native Audio Engine (C++ via CMake and the NDK)
+- `spikes/*`: throwaway spikes that validate ADRs on hardware (e.g. [`audio-engine`](docs/spikes/audio-engine-spike.md)); not shipped
 
 ## Documentation
 

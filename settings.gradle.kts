@@ -18,3 +18,6 @@ rootProject.name = "croonvox"
 
 include(":app")
 include(":engine")
+
+// Throwaway spikes (not shipped).
+include(":spikes:audio-engine")
