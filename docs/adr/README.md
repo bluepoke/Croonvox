@@ -13,3 +13,4 @@
 - [11. Project license: GPL-3.0](0011-license-gpl-3.md)
 - [12. Platform baseline: Android 10+ (minSdk 29), arm64-v8a](0012-platform-baseline.md)
 - [13. Monitoring latency warning, Hardware Monitoring hint, timestamp-based Take alignment](0013-monitoring-and-take-alignment-after-engine-spike.md)
+- [14. Vocal-Free Tracks skip Separation](0014-vocal-free-tracks-skip-separation.md)
