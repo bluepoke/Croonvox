@@ -25,6 +25,7 @@ Ubiquitous language for the project. Decisions are recorded in `docs/adr/`.
 | **Audio Engine** | Native (C++/Oboe) component that owns the Session timeline: playback, Transpose, capture, Monitoring. |
 | **Latency Calibration** | Per-device/route measurement of the input/output offset, applied to Takes so they align. |
 | **Transpose** | Pitch-shift of Backing Audio (and guide Vocal Stem) by −6…+6 semitones, tempo unchanged. A property of each Take. See ADR 5. |
+| **Last Transpose** | The Transpose a Track's control was last set to in a Session, whether or not a Take was kept. A new Session for the Track starts at it. It never changes existing Takes. _Avoid_: default transpose, saved key. |
 | **Lyrics** | Text of the song, from a LyricsProvider (LRCLIB first) or user edits; *plain* or *line-synced*. See ADR 6. |
 | **Lyrics Offset** | Per-Track time shift between lyric timestamps (studio timing) and the Track's audio. |
 | **Tap-to-Sync** | Editor in which the user taps per line during playback to turn plain Lyrics into synced Lyrics. |
@@ -34,7 +35,8 @@ Ubiquitous language for the project. Decisions are recorded in `docs/adr/`.
 | **Mix Settings** | Backing level, vocal level, Vocal Nudge, guide-vocal level, Vocal Effects. |
 | **Vocal Nudge** | Manual ±200 ms alignment of a Take, applied on top of Latency Calibration. |
 | **Vocal Effects** | Mix-time presets for the Take (reverb, compression, high-pass). Never applied to Monitoring. |
-| **Export** | Rendering a Mix to WAV, MP3 or M4A/AAC in `Music/Croonvox/` or via share sheet. See ADR 8. |
+| **Export** | Rendering a Mix, or a Track's Backing Audio alone (Backing Export), to WAV, MP3 or M4A/AAC in `Music/Croonvox/` or via share sheet. See ADR 8. |
+| **Backing Export** | An Export of a Track's Backing Audio (Instrumental or Original Audio) alone at a chosen Transpose, with no Take, e.g. as a backing track for a live performance. _Avoid_: karaoke track, instrumental export. |
 
 ## Open questions
 - None. License → ADR 11, platform baseline → ADR 12.
