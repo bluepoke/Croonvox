@@ -8,7 +8,11 @@ data class Track(
     val artist: String?,
     val durationMs: Long?,
     val pipeline: TrackPipelineState,
-)
+) {
+    /** The Original Audio is stored, so the Track can be played and sung (ADR 10). */
+    val hasOriginalAudio: Boolean
+        get() = pipeline == TrackPipelineState.Downloaded || pipeline is TrackPipelineState.Ready
+}
 
 /** Track identity: the Source plus that Source's own ID for the item (ADR 10). */
 data class TrackId(val source: SourceId, val sourceTrackId: String) {
@@ -35,4 +39,11 @@ sealed interface TrackPipelineState {
 
     /** Original Audio is stored locally; a Session can start (ADR 10). */
     data object Downloaded : TrackPipelineState
+
+    /** Separation with [model] has finished: its Instrumental and Vocal Stem are stored. */
+    data class Ready(val model: SeparationModelId) : TrackPipelineState
 }
+
+/** Identifies one Separation Model of the catalogue (ADR 3). */
+@JvmInline
+value class SeparationModelId(val value: String)

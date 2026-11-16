@@ -8,6 +8,7 @@ import app.croonvox.core.model.TrackPipelineState
 fun TrackPipelineState.label(): String = when (this) {
     TrackPipelineState.Added -> "Added"
     TrackPipelineState.Downloaded -> "Downloaded"
+    is TrackPipelineState.Ready -> "Ready"
 }
 
 /** Secondary line for a Track: artist (if known) and pipeline state. */

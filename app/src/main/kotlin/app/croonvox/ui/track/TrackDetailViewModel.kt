@@ -10,6 +10,7 @@ import app.croonvox.core.player.OpenTrack
 import app.croonvox.core.player.TrackPlayer
 import app.croonvox.core.port.Playback
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -36,9 +37,27 @@ class TrackDetailViewModel(
     val ready: StateFlow<Boolean> = _ready
 
     private var opened: OpenTrack? = null
+    private var opening: Job? = null
+
+    private var resumed = false
 
     init {
-        viewModelScope.launch {
+        open()
+        // A Session opened from here releases the Audio Engine only after this screen resumes.
+        viewModelScope.launch { playback.collect { if (resumed) reopenIfReleased() } }
+    }
+
+    fun onResume() {
+        resumed = true
+        reopenIfReleased()
+    }
+
+    fun onPause() {
+        resumed = false
+    }
+
+    private fun open() {
+        opening = viewModelScope.launch {
             try {
                 opened = player.open(id) { _loadProgress.value = it }
                 _ready.value = true
@@ -50,9 +69,21 @@ class TrackDetailViewModel(
         }
     }
 
+    /** Opens the audio again if something else (a Session) released it meanwhile. */
+    private fun reopenIfReleased() {
+        if (opening?.isActive == true || opened == null || playback.value.loaded != null) return
+        _ready.value = false
+        _loadProgress.value = 0f
+        open()
+    }
+
     fun togglePlay() {
         val track = opened ?: return
         if (playback.value.playing) track.pause() else track.play()
+    }
+
+    fun pause() {
+        opened?.pause()
     }
 
     fun seekTo(positionMs: Long) {

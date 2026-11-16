@@ -2,7 +2,7 @@
 package app.croonvox.core.testing
 
 import app.croonvox.core.model.AudioFile
-import app.croonvox.core.port.SeparationModelId
+import app.croonvox.core.model.SeparationModelId
 import app.croonvox.core.port.Separator
 import app.croonvox.core.port.Stems
 

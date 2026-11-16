@@ -4,7 +4,10 @@ package app.croonvox.data
 import app.croonvox.core.library.StagedFile
 import app.croonvox.core.library.TrackFiles
 import app.croonvox.core.model.AudioFile
+import app.croonvox.core.model.SeparationModelId
+import app.croonvox.core.model.TakeId
 import app.croonvox.core.model.TrackId
+import app.croonvox.core.port.Stems
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -23,6 +26,19 @@ class AppTrackFiles(private val root: File) : TrackFiles {
     private val stagingDir = File(root, ".staging")
 
     override fun originalAudio(track: TrackId): AudioFile = AudioFile(File(dirOf(track), "original").path)
+
+    // Model IDs are catalogue names (e.g. "fast"); hashed like Track keys so they need no escaping.
+    override fun stems(track: TrackId, model: SeparationModelId): Stems {
+        val dir = File(dirOf(track), "stems/${hash(model.value)}")
+        return Stems(AudioFile(File(dir, "instrumental.flac").path), AudioFile(File(dir, "vocals.flac").path))
+    }
+
+    override fun take(track: TrackId, take: TakeId): AudioFile =
+        AudioFile(File(dirOf(track), "takes/${hash(take.value)}.flac").path)
+
+    override suspend fun deleteTake(track: TrackId, take: TakeId) {
+        withContext(Dispatchers.IO) { File(take(track, take).path).delete() }
+    }
 
     override suspend fun stage(content: InputStream): StagedFile = withContext(Dispatchers.IO) {
         stagingDir.mkdirs()
@@ -55,10 +71,10 @@ class AppTrackFiles(private val root: File) : TrackFiles {
         withContext(Dispatchers.IO) { dirOf(track).deleteRecursively() }
     }
 
-    private fun dirOf(track: TrackId): File = File(root, key(track))
+    private fun dirOf(track: TrackId): File = File(root, hash(track.key))
 
-    private fun key(track: TrackId): String =
-        MessageDigest.getInstance("SHA-256").digest(track.key.toByteArray()).take(16).toByteArray().toHex()
+    private fun hash(value: String): String =
+        MessageDigest.getInstance("SHA-256").digest(value.toByteArray()).take(16).toByteArray().toHex()
 
     private fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
 }

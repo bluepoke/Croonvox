@@ -1,9 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package app.croonvox.engine
 
+import android.content.Context
+import android.media.AudioManager
+import android.os.SystemClock
 import android.util.Log
 import app.croonvox.core.model.AudioFile
+import app.croonvox.core.model.InputDevice
+import app.croonvox.core.model.OutputRoute
 import app.croonvox.core.port.AudioEngine
+import app.croonvox.core.port.CapturedTake
+import app.croonvox.core.port.InputLevel
 import app.croonvox.core.port.LoadId
 import app.croonvox.core.port.Playback
 import kotlinx.coroutines.CancellationException
@@ -23,6 +30,9 @@ import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.IOException
+import kotlin.math.pow
 
 /**
  * [AudioEngine] on the native Oboe `PlaybackEngine`.
@@ -31,12 +41,19 @@ import kotlinx.coroutines.withContext
  * small MP3 frame is a round trip to the codec process), so the file keeps decoding in the
  * background while it already plays. [load] returns after [START_BUFFER_MS] are decoded.
  * The decoded audio is held in memory (one copy; see known limitations in the README).
+ *
+ * In a Session the native streams run continuously (low latency, microphone once enabled),
+ * and [playback] and [input] are published every [POSITION_INTERVAL_MS].
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-class OboeAudioEngine : AudioEngine {
+class OboeAudioEngine(context: Context) : AudioEngine {
     private val handle = NativePlayback.create()
+    private val routes = AudioRoutes(context.getSystemService(AudioManager::class.java))
     private val state = MutableStateFlow(Playback.Idle)
     override val playback: StateFlow<Playback> = state
+
+    private val inputState = MutableStateFlow(InputLevel.Off)
+    override val input: StateFlow<InputLevel> = inputState
 
     // Native control calls are serialised on one thread; decoding runs on IO.
     private val control = Dispatchers.Default.limitedParallelism(1)
@@ -45,7 +62,15 @@ class OboeAudioEngine : AudioEngine {
     private var decodeJob: Job? = null
     private var generation = 0L
     private var currentLoad: LoadId? = null
+
+    // Confined to [control].
     private var ticker: Job? = null
+    private var inSession = false
+    /** Route of the recording whose Take audio is held; null when the held audio isn't a fresh capture. */
+    private var captureRoute: OutputRoute? = null
+    private var lastClipCount = 0L
+    private var lastClipAt = Long.MIN_VALUE
+    private val inputDevices = mutableMapOf<Int, InputDevice>()
 
     override suspend fun load(audio: AudioFile, onProgress: (Float) -> Unit): LoadId {
         val playable = CompletableDeferred<Unit>()
@@ -86,7 +111,8 @@ class OboeAudioEngine : AudioEngine {
         decodeJob?.cancelAndJoin()
         decodeJob = null
         withContext(control) {
-            stopTicker()
+            if (!inSession) stopTicker()
+            captureRoute = null
             state.value = Playback.Idle
         }
     }
@@ -161,7 +187,7 @@ class OboeAudioEngine : AudioEngine {
     override fun pause() {
         scope.launch {
             NativePlayback.pause(handle)
-            stopTicker()
+            if (!inSession) stopTicker()
             publish()
         }
     }
@@ -174,12 +200,138 @@ class OboeAudioEngine : AudioEngine {
         }
     }
 
+    // --- Session face ---
+
+    override fun beginSession() {
+        scope.launch {
+            inSession = true
+            NativePlayback.setSessionMode(handle, true)
+            startTicker()
+            publish()
+        }
+    }
+
+    override fun endSession() {
+        scope.launch {
+            inSession = false
+            captureRoute = null
+            NativePlayback.setSessionMode(handle, false)
+            stopTicker()
+            publish()
+        }
+    }
+
+    override suspend fun enableMicrophone(): Boolean = withContext(control) {
+        val enabled = NativePlayback.enableInput(handle)
+        publish()
+        enabled
+    }
+
+    override fun setInputGain(gainDb: Float) {
+        val linear = 10f.pow(gainDb / 20f)
+        scope.launch { NativePlayback.setInputGain(handle, linear) }
+    }
+
+    override fun setReviewBackingGain(gainDb: Float) {
+        val linear = 10f.pow(gainDb / 20f)
+        scope.launch { NativePlayback.setReviewBackingGain(handle, linear) }
+    }
+
+    override suspend fun startRecording(fromMs: Long): Boolean = withContext(control) {
+        val rate = NativePlayback.sampleRate(handle)
+        if (rate <= 0) return@withContext false
+        val started = NativePlayback.startRecording(handle, fromMs * rate / 1000)
+        captureRoute = if (started) routes.output(NativePlayback.outputDeviceId(handle)) else null
+        if (started) startTicker()
+        publish()
+        started
+    }
+
+    override suspend fun stopRecording(): CapturedTake? = withContext(control) {
+        NativePlayback.stopRecording(handle)
+        publish()
+        val route = captureRoute ?: return@withContext null
+        val frames = NativePlayback.takeFrames(handle)
+        if (frames <= 0) return@withContext null
+        val corrected = NativePlayback.takeXRunCorrectionFrames(handle)
+        if (corrected > 0) Log.i(TAG, "Take: $corrected frames corrected after output xruns")
+        CapturedTake(
+            startFrame = NativePlayback.takeStartFrame(handle),
+            frames = frames,
+            sampleRate = NativePlayback.sampleRate(handle),
+            route = route,
+            reportedLatencyFrames = NativePlayback.takeReportedLatencyFrames(handle),
+        )
+    }
+
+    override suspend fun writeTake(file: AudioFile) = withContext(Dispatchers.IO) {
+        val target = File(file.path)
+        target.parentFile?.mkdirs()
+        // Write next to the target, then rename: a Take file is either complete or absent.
+        val partial = File(target.path + ".part")
+        if (!NativePlayback.writeTakeFlac(handle, partial.path)) {
+            partial.delete()
+            throw IOException("could not write ${target.path}")
+        }
+        if (!partial.renameTo(target)) {
+            partial.delete()
+            throw IOException("could not move ${partial.path} to ${target.path}")
+        }
+    }
+
+    override suspend fun loadTake(file: AudioFile, startFrame: Long): Boolean {
+        withContext(control) { captureRoute = null }
+        return try {
+            runInterruptible(Dispatchers.IO) { AudioDecoder.decode(file.path, TakeSink(startFrame)) }
+            NativePlayback.takeFrames(handle) > 0
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "could not load Take ${file.path}", e)
+            withContext(control) { NativePlayback.clearTake(handle) }
+            false
+        }
+    }
+
+    /** Feeds a decoded stored Take into the native engine's Take audio. */
+    private inner class TakeSink(private val startFrame: Long) : AudioDecoder.Sink {
+        private var channels = 1
+
+        override fun begin(channels: Int, sampleRate: Int, estimatedFrames: Long) {
+            this.channels = channels
+            if (!NativePlayback.beginTakeLoad(handle, startFrame, sampleRate, estimatedFrames)) {
+                throw UnsupportedAudioException("Take at $sampleRate Hz doesn't fit the Backing Audio")
+            }
+        }
+
+        override fun append(interleaved: FloatArray, frames: Int) {
+            NativePlayback.appendTakeLoad(handle, interleaved, frames, channels)
+        }
+    }
+
+    override suspend fun playTake(alignmentFrames: Long): Boolean = withContext(control) {
+        val started = NativePlayback.playTake(handle, alignmentFrames)
+        if (started) startTicker()
+        publish()
+        started
+    }
+
+    override fun clearTake() {
+        scope.launch {
+            captureRoute = null
+            NativePlayback.clearTake(handle)
+            publish()
+        }
+    }
+
+    // --- Publishing ---
+
     private fun startTicker() {
         if (ticker?.isActive == true) return
         ticker = scope.launch {
             while (isActive) {
                 delay(POSITION_INTERVAL_MS)
-                if (!NativePlayback.isPlaying(handle)) {
+                if (!inSession && !NativePlayback.isPlaying(handle)) {
                     // Reached the end, or a route change paused it: stop the output stream too.
                     NativePlayback.pause(handle)
                     publish()
@@ -198,18 +350,44 @@ class OboeAudioEngine : AudioEngine {
     private fun publish(loaded: AudioFile? = state.value.loaded) {
         val rate = NativePlayback.sampleRate(handle)
         fun ms(frames: Long) = if (rate > 0) frames * 1000 / rate else 0
+        val transport = NativePlayback.transport(handle)
         state.value = Playback(
             loaded = loaded,
-            playing = NativePlayback.isPlaying(handle),
+            playing = transport != NativePlayback.IDLE,
             positionMs = ms(NativePlayback.positionFrames(handle)),
             durationMs = ms(NativePlayback.durationFrames(handle)),
             bufferedMs = ms(NativePlayback.decodedFrames(handle)),
+            recording = transport == NativePlayback.RECORDING,
+            playingTake = transport == NativePlayback.PLAYING_TAKE,
+        )
+        publishInput()
+    }
+
+    private fun publishInput() {
+        if (!inSession || !NativePlayback.inputEnabled(handle)) {
+            inputState.value = InputLevel.Off
+            return
+        }
+        val clips = NativePlayback.clipCount(handle)
+        val now = SystemClock.elapsedRealtime()
+        if (clips != lastClipCount) {
+            lastClipCount = clips
+            lastClipAt = now
+        }
+        val deviceId = NativePlayback.inputDeviceId(handle)
+        inputState.value = InputLevel(
+            enabled = true,
+            // AudioManager lookups are binder calls: resolve each device ID once.
+            device = inputDevices.getOrPut(deviceId) { routes.input(deviceId) },
+            peak = NativePlayback.inputPeak(handle).coerceIn(0f, 1f),
+            clipping = lastClipAt != Long.MIN_VALUE && now - lastClipAt < CLIP_HOLD_MS,
         )
     }
 
     private companion object {
         const val POSITION_INTERVAL_MS = 50L
         const val START_BUFFER_MS = 2_000L
+        const val CLIP_HOLD_MS = 1_500L
         const val TAG = "CroonvoxEngine"
     }
 }

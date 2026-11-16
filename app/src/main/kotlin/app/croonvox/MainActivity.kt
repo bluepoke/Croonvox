@@ -20,6 +20,7 @@ import app.croonvox.core.model.SourceId
 import app.croonvox.core.model.TrackId
 import app.croonvox.importing.Importer
 import app.croonvox.ui.library.LibraryRoute
+import app.croonvox.ui.session.SessionRoute
 import app.croonvox.ui.theme.CroonvoxTheme
 import app.croonvox.ui.track.TrackDetailRoute
 
@@ -54,7 +55,15 @@ class MainActivity : ComponentActivity() {
                         val args = checkNotNull(entry.arguments)
                         val id = TrackId(SourceId(checkNotNull(args.getString("source"))), checkNotNull(args.getString("id")))
                         // ViewModels here are scoped to this back-stack entry and cleared on Back.
-                        TrackDetailRoute(id, container.trackRepository, container.trackPlayer)
+                        TrackDetailRoute(id, container.trackRepository, container.trackPlayer, onSing = { nav.openSession(id) })
+                    }
+                    composable(
+                        SESSION,
+                        arguments = listOf(navArgument("source") { type = NavType.StringType }, navArgument("id") { type = NavType.StringType }),
+                    ) { entry ->
+                        val args = checkNotNull(entry.arguments)
+                        val id = TrackId(SourceId(checkNotNull(args.getString("source"))), checkNotNull(args.getString("id")))
+                        SessionRoute(id, container.sessions)
                     }
                 }
             }
@@ -82,8 +91,13 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun NavHostController.openSession(id: TrackId) {
+        navigate("session/${Uri.encode(id.source.value)}/${Uri.encode(id.sourceTrackId)}")
+    }
+
     private companion object {
         const val LIBRARY = "library"
         const val TRACK = "track/{source}/{id}"
+        const val SESSION = "session/{source}/{id}"
     }
 }

@@ -5,7 +5,6 @@ import app.croonvox.core.library.TrackFiles
 import app.croonvox.core.library.TrackRepository
 import app.croonvox.core.model.Track
 import app.croonvox.core.model.TrackId
-import app.croonvox.core.model.TrackPipelineState
 import app.croonvox.core.port.AudioEngine
 import app.croonvox.core.port.LoadId
 import app.croonvox.core.port.Playback
@@ -26,7 +25,7 @@ class TrackPlayer(
      */
     suspend fun open(id: TrackId, onProgress: (Float) -> Unit = {}): OpenTrack {
         val track = checkNotNull(tracks.get(id)) { "no Track $id" }
-        if (track.pipeline != TrackPipelineState.Downloaded) throw NotPlayableYet(track)
+        if (!track.hasOriginalAudio) throw NotPlayableYet(track)
         val load = engine.load(files.originalAudio(id), onProgress)
         return OpenTrack(track, load, engine)
     }
@@ -48,5 +47,5 @@ class OpenTrack internal constructor(
     fun close() = engine.unload(load)
 }
 
-/** The Track has no stored Original Audio yet (it is not [TrackPipelineState.Downloaded]). */
+/** The Track has no stored Original Audio yet (see [Track.hasOriginalAudio]). */
 class NotPlayableYet(val track: Track) : IllegalStateException("Track ${track.id.key} is not downloaded yet")

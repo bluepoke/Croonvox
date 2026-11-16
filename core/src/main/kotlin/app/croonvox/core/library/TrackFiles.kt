@@ -2,13 +2,25 @@
 package app.croonvox.core.library
 
 import app.croonvox.core.model.AudioFile
+import app.croonvox.core.model.SeparationModelId
+import app.croonvox.core.model.TakeId
 import app.croonvox.core.model.TrackId
+import app.croonvox.core.port.Stems
 import java.io.InputStream
 
 /** Where a Track's audio files live in app-private storage (ADR 8). */
 interface TrackFiles {
     /** Location for the Track's Original Audio, kept exactly as downloaded or imported. */
     fun originalAudio(track: TrackId): AudioFile
+
+    /** Location for the Instrumental and Vocal Stem that Separation with [model] produced. */
+    fun stems(track: TrackId, model: SeparationModelId): Stems
+
+    /** Location for a kept Take's audio (mono FLAC, ADR 8). */
+    fun take(track: TrackId, take: TakeId): AudioFile
+
+    /** Deletes a Take's audio file, if it exists. */
+    suspend fun deleteTake(track: TrackId, take: TakeId)
 
     /**
      * Copies [content] into a staging file and hashes it (SHA-256) on the way, because a Local

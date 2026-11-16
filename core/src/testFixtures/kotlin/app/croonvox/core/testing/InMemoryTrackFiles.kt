@@ -4,7 +4,10 @@ package app.croonvox.core.testing
 import app.croonvox.core.library.StagedFile
 import app.croonvox.core.library.TrackFiles
 import app.croonvox.core.model.AudioFile
+import app.croonvox.core.model.SeparationModelId
+import app.croonvox.core.model.TakeId
 import app.croonvox.core.model.TrackId
+import app.croonvox.core.port.Stems
 import java.io.InputStream
 import java.security.MessageDigest
 
@@ -21,6 +24,20 @@ class InMemoryTrackFiles : TrackFiles {
     fun originalAudioContent(track: TrackId): ByteArray? = originals[track]
 
     override fun originalAudio(track: TrackId) = AudioFile("/mem/${track.key}/original")
+
+    override fun stems(track: TrackId, model: SeparationModelId) = Stems(
+        instrumental = AudioFile("/mem/${track.key}/${model.value}/instrumental"),
+        vocalStem = AudioFile("/mem/${track.key}/${model.value}/vocals"),
+    )
+
+    override fun take(track: TrackId, take: TakeId) = AudioFile("/mem/${track.key}/takes/${take.value}")
+
+    /** Take files removed through [deleteTake]. */
+    val deletedTakes = mutableListOf<AudioFile>()
+
+    override suspend fun deleteTake(track: TrackId, take: TakeId) {
+        deletedTakes += take(track, take)
+    }
 
     override suspend fun stage(content: InputStream): StagedFile {
         val bytes = content.readBytes()

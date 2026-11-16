@@ -9,8 +9,13 @@ import app.croonvox.core.library.TrackFiles
 import app.croonvox.core.library.TrackRepository
 import app.croonvox.core.player.TrackPlayer
 import app.croonvox.core.port.AudioEngine
+import app.croonvox.core.session.Sessions
+import app.croonvox.core.session.SettingsRepository
+import app.croonvox.core.session.TakeRepository
 import app.croonvox.data.AppTrackFiles
 import app.croonvox.data.CroonvoxDatabase
+import app.croonvox.data.RoomSettingsRepository
+import app.croonvox.data.RoomTakeRepository
 import app.croonvox.data.RoomTrackRepository
 import app.croonvox.engine.OboeAudioEngine
 import app.croonvox.importing.Importer
@@ -31,10 +36,15 @@ class AppContainer(private val context: Context) {
     val trackRepository: TrackRepository by lazy { RoomTrackRepository(database) }
     val trackFiles: TrackFiles by lazy { AppTrackFiles(File(context.filesDir, "tracks")) }
     val workManager: WorkManager by lazy { WorkManager.getInstance(context) }
-    val audioEngine: AudioEngine by lazy { OboeAudioEngine() }
+    val audioEngine: AudioEngine by lazy { OboeAudioEngine(context) }
+    val takeRepository: TakeRepository by lazy { RoomTakeRepository(database) }
+    val settingsRepository: SettingsRepository by lazy { RoomSettingsRepository(database) }
 
     val library: Library by lazy { Library(trackRepository) }
     val importLocalFile: ImportLocalFile by lazy { ImportLocalFile(trackRepository, trackFiles) }
     val trackPlayer: TrackPlayer by lazy { TrackPlayer(trackRepository, trackFiles, audioEngine) }
+    val sessions: Sessions by lazy {
+        Sessions(trackRepository, takeRepository, trackFiles, audioEngine, settingsRepository)
+    }
     val importer: Importer by lazy { Importer(appScope, importLocalFile, trackFiles, context.contentResolver) }
 }

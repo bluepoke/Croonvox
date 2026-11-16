@@ -8,8 +8,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
@@ -22,6 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
@@ -30,10 +32,11 @@ import app.croonvox.core.library.TrackRepository
 import app.croonvox.core.model.TrackId
 import app.croonvox.core.player.TrackPlayer
 import app.croonvox.core.port.Playback
+import app.croonvox.ui.formatTime
 import app.croonvox.ui.subtitle
 
 @Composable
-fun TrackDetailRoute(id: TrackId, tracks: TrackRepository, player: TrackPlayer) {
+fun TrackDetailRoute(id: TrackId, tracks: TrackRepository, player: TrackPlayer, onSing: () -> Unit) {
     val viewModel: TrackDetailViewModel = viewModel(
         factory = viewModelFactory { initializer { TrackDetailViewModel(id, tracks, player) } },
     )
@@ -42,6 +45,11 @@ fun TrackDetailRoute(id: TrackId, tracks: TrackRepository, player: TrackPlayer) 
     val ready by viewModel.ready.collectAsStateWithLifecycle()
     val loadProgress by viewModel.loadProgress.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
+    // A Session opened from here takes over the Audio Engine; get the audio back on return.
+    LifecycleResumeEffect(viewModel) {
+        viewModel.onResume()
+        onPauseOrDispose { viewModel.onPause() }
+    }
     TrackDetailScreen(
         title = track?.title ?: "",
         subtitle = track?.subtitle().orEmpty(),
@@ -49,8 +57,13 @@ fun TrackDetailRoute(id: TrackId, tracks: TrackRepository, player: TrackPlayer) 
         ready = ready,
         loadProgress = loadProgress,
         error = error,
+        canSing = track?.hasOriginalAudio == true,
         onTogglePlay = viewModel::togglePlay,
         onSeek = viewModel::seekTo,
+        onSing = {
+            viewModel.pause()
+            onSing()
+        },
     )
 }
 
@@ -63,10 +76,17 @@ fun TrackDetailScreen(
     ready: Boolean,
     loadProgress: Float,
     error: String?,
+    canSing: Boolean,
     onTogglePlay: () -> Unit,
     onSeek: (Long) -> Unit,
+    onSing: () -> Unit,
 ) {
-    Scaffold(topBar = { TopAppBar(title = { Text(title, maxLines = 1) }) }) { padding ->
+    Scaffold(
+        topBar = { TopAppBar(title = { Text(title, maxLines = 1) }) },
+        floatingActionButton = {
+            if (canSing) ExtendedFloatingActionButton(onClick = onSing) { Text("Sing") }
+        },
+    ) { padding ->
         Column(
             modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -116,9 +136,4 @@ private fun PlaybackControls(playback: Playback, onTogglePlay: () -> Unit, onSee
         )
     }
     Button(onClick = onTogglePlay) { Text(if (playback.playing) "Pause" else "Play") }
-}
-
-private fun formatTime(ms: Long): String {
-    val totalSeconds = ms / 1000
-    return "%d:%02d".format(totalSeconds / 60, totalSeconds % 60)
 }

@@ -2,6 +2,7 @@
 package app.croonvox.core.port
 
 import app.croonvox.core.model.AudioFile
+import app.croonvox.core.model.SeparationModelId
 
 /** On-device Separation of Original Audio into Instrumental and Vocal Stem (ADR 2, ADR 3). */
 interface Separator {
@@ -16,10 +17,6 @@ interface Separator {
         onProgress: (Float) -> Unit = {},
     )
 }
-
-/** Identifies one Separation Model of the catalogue (ADR 3). */
-@JvmInline
-value class SeparationModelId(val value: String)
 
 /** Where the Instrumental and Vocal Stem of one Separation are stored. */
 data class Stems(val instrumental: AudioFile, val vocalStem: AudioFile)

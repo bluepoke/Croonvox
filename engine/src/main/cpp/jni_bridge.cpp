@@ -2,6 +2,8 @@
 // JNI surface for app.croonvox.engine.NativePlayback. Each engine is an owned native handle.
 #include <jni.h>
 
+#include <string>
+
 #include "PlaybackEngine.h"
 
 using croonvox::PlaybackEngine;
@@ -9,6 +11,22 @@ using croonvox::PlaybackEngine;
 namespace {
 
 PlaybackEngine &engine(jlong handle) { return *reinterpret_cast<PlaybackEngine *>(handle); }
+
+std::string toString(JNIEnv *env, jstring value) {
+    const char *chars = env->GetStringUTFChars(value, nullptr);
+    std::string result(chars ? chars : "");
+    if (chars) env->ReleaseStringUTFChars(value, chars);
+    return result;
+}
+
+// Hands a Java float[] to [use] without copying when the VM allows it.
+template <typename Use>
+void withSamples(JNIEnv *env, jfloatArray data, Use use) {
+    jfloat *samples = env->GetFloatArrayElements(data, nullptr);
+    if (!samples) return;
+    use(samples);
+    env->ReleaseFloatArrayElements(data, samples, JNI_ABORT);
+}
 
 }  // namespace
 
@@ -22,10 +40,8 @@ JNI_FN(void, beginLoad)(JNIEnv *, jobject, jlong h, jint channels, jint sampleRa
 }
 
 JNI_FN(jboolean, appendLoad)(JNIEnv *env, jobject, jlong h, jfloatArray data, jint frames) {
-    jfloat *samples = env->GetFloatArrayElements(data, nullptr);
-    if (!samples) return JNI_FALSE;
-    const bool fits = engine(h).appendLoad(samples, frames);
-    env->ReleaseFloatArrayElements(data, samples, JNI_ABORT);
+    bool fits = false;
+    withSamples(env, data, [&](const jfloat *samples) { fits = engine(h).appendLoad(samples, frames); });
     return fits ? JNI_TRUE : JNI_FALSE;
 }
 
@@ -39,6 +55,8 @@ JNI_FN(void, pause)(JNIEnv *, jobject, jlong h) { engine(h).pause(); }
 
 JNI_FN(void, seekTo)(JNIEnv *, jobject, jlong h, jlong frame) { engine(h).seekTo(frame); }
 
+JNI_FN(jint, transport)(JNIEnv *, jobject, jlong h) { return static_cast<jint>(engine(h).transport()); }
+
 JNI_FN(jboolean, isPlaying)(JNIEnv *, jobject, jlong h) { return engine(h).isPlaying() ? JNI_TRUE : JNI_FALSE; }
 
 JNI_FN(jlong, positionFrames)(JNIEnv *, jobject, jlong h) { return engine(h).positionFrames(); }
@@ -48,3 +66,55 @@ JNI_FN(jlong, durationFrames)(JNIEnv *, jobject, jlong h) { return engine(h).dur
 JNI_FN(jlong, decodedFrames)(JNIEnv *, jobject, jlong h) { return engine(h).decodedFrames(); }
 
 JNI_FN(jint, sampleRate)(JNIEnv *, jobject, jlong h) { return engine(h).sampleRate(); }
+
+// --- Session ---
+
+JNI_FN(void, setSessionMode)(JNIEnv *, jobject, jlong h, jboolean enabled) { engine(h).setSessionMode(enabled); }
+
+JNI_FN(jboolean, enableInput)(JNIEnv *, jobject, jlong h) { return engine(h).enableInput() ? JNI_TRUE : JNI_FALSE; }
+
+JNI_FN(jboolean, inputEnabled)(JNIEnv *, jobject, jlong h) { return engine(h).inputEnabled() ? JNI_TRUE : JNI_FALSE; }
+
+JNI_FN(void, setInputGain)(JNIEnv *, jobject, jlong h, jfloat linear) { engine(h).setInputGain(linear); }
+
+JNI_FN(void, setReviewBackingGain)(JNIEnv *, jobject, jlong h, jfloat linear) { engine(h).setReviewBackingGain(linear); }
+
+JNI_FN(jfloat, inputPeak)(JNIEnv *, jobject, jlong h) { return engine(h).inputPeak(); }
+
+JNI_FN(jlong, clipCount)(JNIEnv *, jobject, jlong h) { return engine(h).clipCount(); }
+
+JNI_FN(jint, outputDeviceId)(JNIEnv *, jobject, jlong h) { return engine(h).outputDeviceId(); }
+
+JNI_FN(jint, inputDeviceId)(JNIEnv *, jobject, jlong h) { return engine(h).inputDeviceId(); }
+
+JNI_FN(jboolean, startRecording)(JNIEnv *, jobject, jlong h, jlong fromFrame) {
+    return engine(h).startRecording(fromFrame) ? JNI_TRUE : JNI_FALSE;
+}
+
+JNI_FN(void, stopRecording)(JNIEnv *, jobject, jlong h) { engine(h).stopRecording(); }
+
+JNI_FN(jlong, takeStartFrame)(JNIEnv *, jobject, jlong h) { return engine(h).takeStartFrame(); }
+
+JNI_FN(jlong, takeFrames)(JNIEnv *, jobject, jlong h) { return engine(h).takeFrames(); }
+
+JNI_FN(jlong, takeReportedLatencyFrames)(JNIEnv *, jobject, jlong h) { return engine(h).takeReportedLatencyFrames(); }
+
+JNI_FN(jlong, takeXRunCorrectionFrames)(JNIEnv *, jobject, jlong h) { return engine(h).takeXRunCorrectionFrames(); }
+
+JNI_FN(jboolean, playTake)(JNIEnv *, jobject, jlong h, jlong alignmentFrames) {
+    return engine(h).playTake(alignmentFrames) ? JNI_TRUE : JNI_FALSE;
+}
+
+JNI_FN(void, clearTake)(JNIEnv *, jobject, jlong h) { engine(h).clearTake(); }
+
+JNI_FN(jboolean, beginTakeLoad)(JNIEnv *, jobject, jlong h, jlong startFrame, jint sampleRate, jlong estimatedFrames) {
+    return engine(h).beginTakeLoad(startFrame, sampleRate, estimatedFrames) ? JNI_TRUE : JNI_FALSE;
+}
+
+JNI_FN(void, appendTakeLoad)(JNIEnv *env, jobject, jlong h, jfloatArray data, jint frames, jint channels) {
+    withSamples(env, data, [&](const jfloat *samples) { engine(h).appendTakeLoad(samples, frames, channels); });
+}
+
+JNI_FN(jboolean, writeTakeFlac)(JNIEnv *env, jobject, jlong h, jstring path) {
+    return engine(h).writeTakeFlac(toString(env, path)) ? JNI_TRUE : JNI_FALSE;
+}

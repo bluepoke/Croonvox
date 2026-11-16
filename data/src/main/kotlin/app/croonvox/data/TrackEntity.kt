@@ -3,6 +3,7 @@ package app.croonvox.data
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
+import app.croonvox.core.model.SeparationModelId
 import app.croonvox.core.model.SourceId
 import app.croonvox.core.model.Track
 import app.croonvox.core.model.TrackId
@@ -42,10 +43,14 @@ internal fun TrackEntity.toTrack() = Track(
 internal fun TrackPipelineState.toColumn(): String = when (this) {
     TrackPipelineState.Added -> "added"
     TrackPipelineState.Downloaded -> "downloaded"
+    is TrackPipelineState.Ready -> "$READY_PREFIX${model.value}"
 }
 
-private fun pipelineStateFromColumn(value: String): TrackPipelineState = when (value) {
-    "added" -> TrackPipelineState.Added
-    "downloaded" -> TrackPipelineState.Downloaded
+private fun pipelineStateFromColumn(value: String): TrackPipelineState = when {
+    value == "added" -> TrackPipelineState.Added
+    value == "downloaded" -> TrackPipelineState.Downloaded
+    value.startsWith(READY_PREFIX) -> TrackPipelineState.Ready(SeparationModelId(value.removePrefix(READY_PREFIX)))
     else -> error("unknown pipeline state '$value'")
 }
+
+private const val READY_PREFIX = "ready:"

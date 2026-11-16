@@ -1,12 +1,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 cmake_minimum_required(VERSION 3.24)
-project(croonvox_engine LANGUAGES CXX)
+project(croonvox_engine LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Signalsmith Stretch: real-time Transpose (ADR 5).
 include(FetchContent)
+
+# Signalsmith Stretch: real-time Transpose (ADR 5).
 FetchContent_Declare(
         signalsmith-stretch
         GIT_REPOSITORY https://github.com/Signalsmith-Audio/signalsmith-stretch.git
@@ -14,6 +15,29 @@ FetchContent_Declare(
         GIT_SHALLOW ON
 )
 FetchContent_MakeAvailable(signalsmith-stretch)
+
+# libFLAC (BSD-3-Clause): Takes are stored as mono FLAC (ADR 8). Only the C encoder/decoder
+# library is built, statically, without Ogg, programs, docs or tests.
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(BUILD_CXXLIBS OFF CACHE BOOL "" FORCE)
+set(BUILD_PROGRAMS OFF CACHE BOOL "" FORCE)
+set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+set(BUILD_DOCS OFF CACHE BOOL "" FORCE)
+set(BUILD_UTILS OFF CACHE BOOL "" FORCE)
+set(INSTALL_MANPAGES OFF CACHE BOOL "" FORCE)
+set(INSTALL_PKGCONFIG_MODULES OFF CACHE BOOL "" FORCE)
+set(INSTALL_CMAKE_CONFIG_MODULE OFF CACHE BOOL "" FORCE)
+set(WITH_OGG OFF CACHE BOOL "" FORCE)
+set(WITH_FORTIFY_SOURCE OFF CACHE BOOL "" FORCE)
+set(WITH_STACK_PROTECTOR OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+        flac
+        GIT_REPOSITORY https://github.com/xiph/flac.git
+        GIT_TAG 1.4.3
+        GIT_SHALLOW ON
+)
+FetchContent_MakeAvailable(flac)
 
 # Oboe via prefab: low-latency full-duplex audio (ADR 4).
 find_package(oboe REQUIRED CONFIG)
@@ -23,7 +47,7 @@ add_library(croonvox_engine SHARED
         jni_bridge.cpp
 )
 
-target_link_libraries(croonvox_engine PRIVATE oboe::oboe signalsmith-stretch log android)
+target_link_libraries(croonvox_engine PRIVATE oboe::oboe signalsmith-stretch FLAC log android)
 
 # Signalsmith Stretch is ~10x slower unoptimised; keep DSP optimised even in debug builds.
 target_compile_options(croonvox_engine PRIVATE -O2 -Wall -Wextra -Wno-unused-parameter)

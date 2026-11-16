@@ -14,7 +14,7 @@ Ubiquitous language for the project. Decisions are recorded in `docs/adr/`.
 | **Instrumental** | Original Audio with the lead vocal removed; the default playback layer in a Session. |
 | **Vocal Stem** | The isolated original lead vocal produced by Separation (could serve as an optional guide vocal). |
 | **Backing Audio** | Whatever plays under the singer in a Session: Instrumental by default, or Original Audio. |
-| **Take** | One microphone recording of the user singing over a Track, at a fixed Transpose. A Track has many Takes. Never modified after recording. |
+| **Take** | One microphone recording of the user singing over a Track, at a fixed Transpose. A Track has many Takes. Its audio and timing are never modified after recording; only its name can change. |
 | **Session** | Singing over a Track: Backing Audio plays (video follows the Audio Engine clock), Lyrics display, optional Monitoring, Practice Loop or recording of a Take, then Review. See ADR 9. |
 | **Start Position** | Where on the Track timeline a Take begins; Takes may cover only part of the song. |
 | **Practice Loop** | A–B section looped without recording, for learning a passage. |
