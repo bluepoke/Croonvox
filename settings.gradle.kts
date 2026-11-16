@@ -23,3 +23,5 @@ include(":engine")
 
 // Throwaway spikes (not shipped).
 include(":spikes:audio-engine")
+include(":spikes:separation-core")
+include(":spikes:separation")
