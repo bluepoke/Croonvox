@@ -165,7 +165,7 @@ bool PlaybackEngine::startStreamLocked() {
     if (mSession) return openSessionStreamsLocked();
     oboe::AudioStreamBuilder builder;
     builder.setDirection(oboe::Direction::Output)
-            // Plain playback: favour battery over latency. Sessions get their own low-latency path.
+            // Plain playback: favour battery over latency.
             ->setPerformanceMode(oboe::PerformanceMode::None)
             ->setSharingMode(oboe::SharingMode::Shared)
             ->setFormat(oboe::AudioFormat::Float)
@@ -190,6 +190,10 @@ bool PlaybackEngine::startStreamLocked() {
 
 // Session streams run as long as the Session is open, so recording and metering start at once
 // and the input/output relation is settled when a Take begins (ADR 4).
+//
+// The output takes the normal path, like plain playback: devices apply their speaker processing
+// (e.g. Dolby Atmos) only there, and the low-latency path sounds thin without it. Latency only
+// matters for Monitoring; Takes are aligned by timestamps and Latency Calibration (ADR 16).
 bool PlaybackEngine::openSessionStreamsLocked() {
     closeStreamLocked();
     const int32_t rate = mSampleRate.load();
@@ -197,8 +201,8 @@ bool PlaybackEngine::openSessionStreamsLocked() {
 
     oboe::AudioStreamBuilder out;
     out.setDirection(oboe::Direction::Output)
-            ->setPerformanceMode(oboe::PerformanceMode::LowLatency)
-            ->setSharingMode(oboe::SharingMode::Exclusive)
+            ->setPerformanceMode(oboe::PerformanceMode::None)
+            ->setSharingMode(oboe::SharingMode::Shared)
             ->setFormat(oboe::AudioFormat::Float)
             ->setChannelCount(oboe::ChannelCount::Stereo)
             ->setSampleRate(rate)
@@ -213,8 +217,6 @@ bool PlaybackEngine::openSessionStreamsLocked() {
         mStream.reset();
         return false;
     }
-    mStream->setBufferSizeInFrames(mStream->getFramesPerBurst() * 2);
-
     if (mInputWanted) {
         oboe::AudioStreamBuilder in;
         in.setDirection(oboe::Direction::Input)

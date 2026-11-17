@@ -15,3 +15,4 @@
 - [13. Monitoring latency warning, Hardware Monitoring hint, timestamp-based Take alignment](0013-monitoring-and-take-alignment-after-engine-spike.md)
 - [14. Vocal-Free Tracks skip Separation](0014-vocal-free-tracks-skip-separation.md)
 - [15. Separation Model catalogue after the separation spike](0015-separation-model-catalogue-after-spike.md)
+- [16. The Session plays through the normal output path unless Monitoring is on](0016-session-output-normal-path-unless-monitoring.md)

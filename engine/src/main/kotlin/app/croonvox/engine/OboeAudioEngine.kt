@@ -42,7 +42,7 @@ import kotlin.math.pow
  * background while it already plays. [load] returns after [START_BUFFER_MS] are decoded.
  * The decoded audio is held in memory (one copy; see known limitations in the README).
  *
- * In a Session the native streams run continuously (low latency, microphone once enabled),
+ * In a Session the native streams run continuously (microphone once enabled; ADR 16),
  * and [playback] and [input] are published every [POSITION_INTERVAL_MS].
  */
 @OptIn(ExperimentalCoroutinesApi::class)

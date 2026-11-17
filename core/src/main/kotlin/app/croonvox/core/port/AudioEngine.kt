@@ -37,7 +37,7 @@ interface AudioEngine {
     // --- Session face (ADR 4, ADR 9) ---
 
     /**
-     * Switches to low-latency Session audio until [endSession]. The loaded audio stays loaded,
+     * Switches to Session audio (streams that keep running, microphone) until [endSession]. The loaded audio stays loaded,
      * and later [load] calls stay in Session audio.
      */
     fun beginSession()
