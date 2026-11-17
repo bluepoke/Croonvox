@@ -3,6 +3,7 @@ package app.croonvox.ui.session
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.croonvox.core.lyrics.LyricsOffset
 import app.croonvox.core.lyrics.LyricsRepository
 import app.croonvox.core.lyrics.TrackLyrics
 import app.croonvox.core.model.Take
@@ -29,9 +30,33 @@ import kotlinx.coroutines.launch
 
 /** Holds one open [Session] for as long as the Session screen is on the back stack. */
 @OptIn(ExperimentalCoroutinesApi::class)
-class SessionViewModel(id: TrackId, sessions: Sessions, lyrics: LyricsRepository) : ViewModel() {
-    /** The Track's Lyrics for the Page View; they may still change (e.g. a search finishing). */
+class SessionViewModel(
+    private val id: TrackId,
+    sessions: Sessions,
+    lyrics: LyricsRepository,
+    private val lyricsOffset: LyricsOffset,
+) : ViewModel() {
+    /** The Track's Lyrics; they may still change (e.g. a search finishing). */
     val lyrics: StateFlow<TrackLyrics?> = lyrics.observe(id).stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /** The Track's Lyrics Offset in ms (ADR 6). */
+    val lyricsOffsetMs: StateFlow<Long> = lyricsOffset.observe(id).stateIn(viewModelScope, SharingStarted.Eagerly, 0L)
+
+    private val _karaoke = MutableStateFlow(true)
+    /** Karaoke View (if the Lyrics are synced) rather than Page View; for this Session only. */
+    val karaoke: StateFlow<Boolean> = _karaoke
+
+    fun showKaraoke(karaoke: Boolean) {
+        _karaoke.value = karaoke
+    }
+
+    fun nudgeLyricsOffset(deltaMs: Long) {
+        viewModelScope.launch { lyricsOffset.nudge(id, deltaMs) }
+    }
+
+    fun resetLyricsOffset() {
+        viewModelScope.launch { lyricsOffset.reset(id) }
+    }
 
     private val session = MutableStateFlow<Session?>(null)
 

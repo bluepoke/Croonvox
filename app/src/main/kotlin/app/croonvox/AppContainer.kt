@@ -8,6 +8,7 @@ import app.croonvox.core.library.Library
 import app.croonvox.core.library.TrackFiles
 import app.croonvox.core.library.TrackRepository
 import app.croonvox.core.lyrics.FetchLyrics
+import app.croonvox.core.lyrics.LyricsOffset
 import app.croonvox.core.lyrics.LyricsPipeline
 import app.croonvox.core.lyrics.LyricsRepository
 import app.croonvox.core.lyrics.MatchLyrics
@@ -80,5 +81,6 @@ class AppContainer(private val context: Context) {
     }
     val fetchLyrics: FetchLyrics by lazy { FetchLyrics(trackRepository, lyricsRepository, lyricsProvider) }
     val matchLyrics: MatchLyrics by lazy { MatchLyrics(trackRepository, lyricsRepository, lyricsProvider) }
+    val lyricsOffset: LyricsOffset by lazy { LyricsOffset(lyricsRepository) }
     val lyricsPipeline: LyricsPipeline by lazy { LyricsPipeline(trackRepository, lyricsRepository, pipelineJobs) }
 }

@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.yield
 
 class InMemoryLyricsRepository : LyricsRepository {
     private val all = MutableStateFlow<Map<TrackId, TrackLyrics>>(emptyMap())
@@ -20,6 +21,15 @@ class InMemoryLyricsRepository : LyricsRepository {
 
     override suspend fun set(track: TrackId, lyrics: TrackLyrics) {
         all.update { it + (track to lyrics) }
+    }
+
+    private val offsets = MutableStateFlow<Map<TrackId, Long>>(emptyMap())
+
+    override fun observeOffset(track: TrackId): Flow<Long> = offsets.map { it[track] ?: 0L }
+
+    override suspend fun setOffset(track: TrackId, offsetMs: Long) {
+        yield() // a real write suspends (Room), so other callers can run in between
+        offsets.update { it + (track to offsetMs) }
     }
 
     override suspend fun addIfAbsent(track: TrackId, lyrics: TrackLyrics): Boolean {

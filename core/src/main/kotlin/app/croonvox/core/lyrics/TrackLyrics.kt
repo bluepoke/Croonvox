@@ -24,6 +24,13 @@ sealed interface TrackLyrics {
     data class Failed(val reason: String) : TrackLyrics
 }
 
+/** The Lyrics to show: the suggested or confirmed match, if there is one. */
+fun TrackLyrics?.candidate(): LyricsCandidate? = when (this) {
+    is TrackLyrics.Suggested -> lyrics
+    is TrackLyrics.Confirmed -> lyrics
+    else -> null
+}
+
 /** Persistence of each Track's Lyrics. Implemented by the data layer (Room); faked in tests. */
 interface LyricsRepository {
     fun observe(track: TrackId): Flow<TrackLyrics?>
@@ -37,4 +44,9 @@ interface LyricsRepository {
 
     /** Stores [lyrics] unless the Track has Lyrics state already; returns whether it did. Must be atomic. */
     suspend fun addIfAbsent(track: TrackId, lyrics: TrackLyrics): Boolean
+
+    /** The Track's Lyrics Offset in ms (0 until set), updated as it changes. Independent of [set]. */
+    fun observeOffset(track: TrackId): Flow<Long>
+
+    suspend fun setOffset(track: TrackId, offsetMs: Long)
 }

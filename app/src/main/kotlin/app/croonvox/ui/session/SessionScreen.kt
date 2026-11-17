@@ -26,6 +26,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -51,13 +54,16 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import app.croonvox.core.lyrics.Lrc
+import app.croonvox.core.lyrics.LyricsOffset
+import app.croonvox.core.lyrics.LyricsRepository
+import app.croonvox.core.lyrics.TrackLyrics
+import app.croonvox.core.lyrics.candidate
 import app.croonvox.core.model.InputDevice
 import app.croonvox.core.model.OutputRoute
 import app.croonvox.core.model.SourceId
 import app.croonvox.core.model.Take
 import app.croonvox.core.model.TakeId
-import app.croonvox.core.lyrics.LyricsRepository
-import app.croonvox.core.lyrics.TrackLyrics
 import app.croonvox.core.model.TrackId
 import app.croonvox.core.port.CapturedTake
 import app.croonvox.core.port.InputLevel
@@ -68,14 +74,17 @@ import app.croonvox.core.session.Session
 import app.croonvox.core.session.SessionState
 import app.croonvox.core.session.Sessions
 import app.croonvox.ui.formatTime
+import app.croonvox.ui.lyrics.KaraokeView
 import app.croonvox.ui.lyrics.PageView
 import app.croonvox.ui.theme.CroonvoxTheme
 import kotlin.math.log10
 import kotlin.math.roundToInt
 
 @Composable
-fun SessionRoute(id: TrackId, sessions: Sessions, lyrics: LyricsRepository) {
-    val viewModel: SessionViewModel = viewModel(factory = viewModelFactory { initializer { SessionViewModel(id, sessions, lyrics) } })
+fun SessionRoute(id: TrackId, sessions: Sessions, lyrics: LyricsRepository, lyricsOffset: LyricsOffset) {
+    val viewModel: SessionViewModel = viewModel(
+        factory = viewModelFactory { initializer { SessionViewModel(id, sessions, lyrics, lyricsOffset) } },
+    )
     val context = LocalContext.current
     fun micAllowed() = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
 
@@ -111,12 +120,14 @@ fun SessionRoute(id: TrackId, sessions: Sessions, lyrics: LyricsRepository) {
     val reviewBacking by viewModel.reviewBackingDb.collectAsStateWithLifecycle()
     val takes by viewModel.takes.collectAsStateWithLifecycle()
     val trackLyrics by viewModel.lyrics.collectAsStateWithLifecycle()
+    val offsetMs by viewModel.lyricsOffsetMs.collectAsStateWithLifecycle()
+    val karaoke by viewModel.karaoke.collectAsStateWithLifecycle()
 
     SessionScreen(
         title = title,
         openError = openError,
         snackbar = snackbar,
-        content = SessionContent(state, backing, playback, input, gain, countdown, reviewBacking, takes, trackLyrics),
+        content = SessionContent(state, backing, playback, input, gain, countdown, reviewBacking, takes, trackLyrics, offsetMs, karaoke),
         actions = SessionActions(
             onTogglePlay = viewModel::togglePlay,
             onSeek = viewModel::seekTo,
@@ -133,6 +144,9 @@ fun SessionRoute(id: TrackId, sessions: Sessions, lyrics: LyricsRepository) {
             onPlayTake = viewModel::playTake,
             onRename = viewModel::rename,
             onDelete = viewModel::delete,
+            onShowKaraoke = viewModel::showKaraoke,
+            onNudgeLyricsOffset = viewModel::nudgeLyricsOffset,
+            onResetLyricsOffset = viewModel::resetLyricsOffset,
         ),
     )
 }
@@ -148,6 +162,9 @@ data class SessionContent(
     val reviewBackingDb: Float,
     val takes: List<Take>,
     val lyrics: TrackLyrics?,
+    val lyricsOffsetMs: Long,
+    /** Karaoke View rather than Page View, when the Lyrics are synced. */
+    val karaoke: Boolean,
 )
 
 data class SessionActions(
@@ -166,6 +183,9 @@ data class SessionActions(
     val onPlayTake: (TakeId) -> Unit = {},
     val onRename: (TakeId, String) -> Unit = { _, _ -> },
     val onDelete: (TakeId) -> Unit = {},
+    val onShowKaraoke: (Boolean) -> Unit = {},
+    val onNudgeLyricsOffset: (Long) -> Unit = {},
+    val onResetLyricsOffset: () -> Unit = {},
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -183,7 +203,7 @@ fun SessionScreen(
     ) { padding ->
         // Lyrics on top (Page View), the Session's controls below; each half scrolls on its own.
         Column(Modifier.fillMaxSize().padding(padding)) {
-            PageView(content.lyrics, Modifier.weight(1f).fillMaxWidth().padding(16.dp))
+            LyricsPane(content, actions, Modifier.weight(1f).fillMaxWidth().padding(16.dp))
             HorizontalDivider()
             Column(
                 modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
@@ -191,6 +211,28 @@ fun SessionScreen(
             ) {
                 SessionControls(openError, content, actions)
             }
+        }
+    }
+}
+
+/** Karaoke View for synced Lyrics (switchable to Page View), Page View otherwise. */
+@Composable
+private fun LyricsPane(content: SessionContent, actions: SessionActions, modifier: Modifier) {
+    val synced = content.lyrics.candidate()?.synced
+    val lines = remember(synced) { synced?.let(Lrc::parse).orEmpty() }
+    if (lines.isEmpty()) return PageView(content.lyrics, modifier)
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SingleChoiceSegmentedButtonRow {
+            SegmentedButton(content.karaoke, { actions.onShowKaraoke(true) }, SegmentedButtonDefaults.itemShape(0, 2)) { Text("Karaoke") }
+            SegmentedButton(!content.karaoke, { actions.onShowKaraoke(false) }, SegmentedButtonDefaults.itemShape(1, 2)) { Text("Page") }
+        }
+        if (content.karaoke) {
+            KaraokeView(
+                lines, content.playback, content.lyricsOffsetMs, actions.onNudgeLyricsOffset, actions.onResetLyricsOffset,
+                Modifier.weight(1f).fillMaxWidth(),
+            )
+        } else {
+            PageView(content.lyrics, Modifier.weight(1f).fillMaxWidth())
         }
     }
 }
@@ -486,6 +528,8 @@ private fun ReviewPreview() {
                 lyrics = TrackLyrics.Confirmed(
                     LyricsCandidate("1", "Frank Sinatra", "Fly Me to the Moon", 148_000, "Fly me to the moon\nLet me play among the stars", null),
                 ),
+                lyricsOffsetMs = 0,
+                karaoke = true,
             ),
             actions = SessionActions(),
         )

@@ -69,7 +69,7 @@ class MainActivity : ComponentActivity() {
                     ) { entry ->
                         val args = checkNotNull(entry.arguments)
                         val id = TrackId(SourceId(checkNotNull(args.getString("source"))), checkNotNull(args.getString("id")))
-                        SessionRoute(id, container.sessions, container.lyricsRepository)
+                        SessionRoute(id, container.sessions, container.lyricsRepository, container.lyricsOffset)
                     }
                     composable(
                         LYRICS,

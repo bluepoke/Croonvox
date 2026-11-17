@@ -96,6 +96,28 @@ private const val CONFIRMED = "confirmed"
 private const val NOT_FOUND = "not_found"
 private const val FAILED = "failed"
 
+/**
+ * Row of the `lyrics_offsets` table (version 6, #12): a Track's Lyrics Offset. Its own table, so
+ * choosing other Lyrics (which replaces the `lyrics` row) keeps it.
+ */
+@Entity(
+    tableName = "lyrics_offsets",
+    primaryKeys = ["source", "source_track_id"],
+    foreignKeys = [
+        ForeignKey(
+            entity = TrackEntity::class,
+            parentColumns = ["source", "source_track_id"],
+            childColumns = ["source", "source_track_id"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+)
+internal data class LyricsOffsetEntity(
+    @ColumnInfo(name = "source") val source: String,
+    @ColumnInfo(name = "source_track_id") val sourceTrackId: String,
+    @ColumnInfo(name = "offset_ms") val offsetMs: Long,
+)
+
 @Dao
 internal interface LyricsDao {
     @Query("SELECT * FROM lyrics WHERE source = :source AND source_track_id = :sourceTrackId")
@@ -113,6 +135,12 @@ internal interface LyricsDao {
     /** Returns -1 if the Track has a row already. */
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertOrIgnore(lyrics: LyricsEntity): Long
+
+    @Query("SELECT offset_ms FROM lyrics_offsets WHERE source = :source AND source_track_id = :sourceTrackId")
+    fun observeOffset(source: String, sourceTrackId: String): Flow<Long?>
+
+    @Upsert
+    suspend fun putOffset(offset: LyricsOffsetEntity)
 }
 
 /** [LyricsRepository] on Room. */
@@ -130,4 +158,10 @@ class RoomLyricsRepository(database: CroonvoxDatabase) : LyricsRepository {
     override suspend fun set(track: TrackId, lyrics: TrackLyrics) = dao.put(lyrics.toEntity(track))
 
     override suspend fun addIfAbsent(track: TrackId, lyrics: TrackLyrics): Boolean = dao.insertOrIgnore(lyrics.toEntity(track)) != -1L
+
+    override fun observeOffset(track: TrackId): Flow<Long> =
+        dao.observeOffset(track.source.value, track.sourceTrackId).map { it ?: 0L }
+
+    override suspend fun setOffset(track: TrackId, offsetMs: Long) =
+        dao.putOffset(LyricsOffsetEntity(track.source.value, track.sourceTrackId, offsetMs))
 }

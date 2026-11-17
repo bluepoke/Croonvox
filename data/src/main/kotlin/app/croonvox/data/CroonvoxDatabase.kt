@@ -8,14 +8,15 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 
 @Database(
-    entities = [TrackEntity::class, TakeEntity::class, SettingEntity::class, LyricsEntity::class],
-    version = 5,
+    entities = [TrackEntity::class, TakeEntity::class, SettingEntity::class, LyricsEntity::class, LyricsOffsetEntity::class],
+    version = 6,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2), // 2: takes and settings tables (#8)
         AutoMigration(from = 2, to = 3), // 3: pipeline progress and failure reason (#7)
         AutoMigration(from = 3, to = 4), // 4: lyrics table (#11)
         AutoMigration(from = 4, to = 5), // 5: lyrics rows go with their Track (#11)
+        AutoMigration(from = 5, to = 6), // 6: lyrics offsets (#12)
     ],
 )
 abstract class CroonvoxDatabase : RoomDatabase() {
