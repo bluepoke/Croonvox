@@ -19,8 +19,10 @@ import androidx.navigation.navArgument
 import app.croonvox.core.model.SourceId
 import app.croonvox.core.model.TrackId
 import app.croonvox.importing.Importer
+import app.croonvox.importing.LinkImporter
 import app.croonvox.ui.library.LibraryRoute
 import app.croonvox.ui.lyrics.LyricsSearchRoute
+import app.croonvox.ui.search.SearchRoute
 import app.croonvox.ui.session.SessionRoute
 import app.croonvox.ui.theme.CroonvoxTheme
 import app.croonvox.ui.track.TrackDetailRoute
@@ -36,6 +38,17 @@ class MainActivity : ComponentActivity() {
             CroonvoxTheme {
                 val nav = rememberNavController()
                 LaunchedEffect(Unit) {
+                    container.linkImporter.results.collect { result ->
+                        when (result) {
+                            is LinkImporter.Result.Added -> nav.openTrack(result.id)
+                            LinkImporter.Result.Unsupported ->
+                                Toast.makeText(this@MainActivity, "Croonvox can't add songs from this link", Toast.LENGTH_LONG).show()
+                            is LinkImporter.Result.Failed ->
+                                Toast.makeText(this@MainActivity, "Can't add the song: ${result.reason}", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                }
+                LaunchedEffect(Unit) {
                     container.importer.results.collect { result ->
                         when (result) {
                             // Opens the new Track, or the existing one for content imported before.
@@ -47,7 +60,14 @@ class MainActivity : ComponentActivity() {
                 }
                 NavHost(nav, startDestination = LIBRARY) {
                     composable(LIBRARY) {
-                        LibraryRoute(container.library, container.importer, onOpen = { nav.openTrack(it) })
+                        LibraryRoute(
+                            container.library, container.importer,
+                            onOpen = { nav.openTrack(it) },
+                            onSearch = if (container.sources.isEmpty()) null else ({ nav.navigate(SEARCH) }),
+                        )
+                    }
+                    composable(SEARCH) {
+                        SearchRoute(container.sources, container.library, onAdded = { nav.openTrack(it) })
                     }
                     composable(
                         TRACK,
@@ -89,13 +109,15 @@ class MainActivity : ComponentActivity() {
         handleShare(intent)
     }
 
-    /** A file shared into Croonvox from another app (Share → Croonvox). */
+    /** A file or link shared into Croonvox from another app (Share → Croonvox). */
     private fun handleShare(intent: Intent?) {
         if (intent?.action != Intent.ACTION_SEND) return
         // Reopening from recents replays the original intent; its URI grant may be gone.
         if (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0) return
-        val uri = IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java) ?: return
-        container.importer.import(uri)
+        val uri = IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)
+        if (uri != null) return container.importer.import(uri)
+        // A link (network flavor only receives text): a video page shared from a browser or app.
+        intent.getStringExtra(Intent.EXTRA_TEXT)?.let(container.linkImporter::add)
     }
 
     /** Shows a Track's detail, replacing any detail screen already open (one Track at a time). */
@@ -111,6 +133,7 @@ class MainActivity : ComponentActivity() {
 
     private companion object {
         const val LIBRARY = "library"
+        const val SEARCH = "search"
         const val TRACK = "track/{source}/{id}"
         const val SESSION = "session/{source}/{id}"
         const val LYRICS = "lyrics/{source}/{id}"

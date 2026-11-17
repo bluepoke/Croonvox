@@ -57,6 +57,21 @@ class AppTrackFiles(private val root: File) : TrackFiles {
         StagedFile(AudioFile(file.path), digest.digest().toHex())
     }
 
+    override fun downloadPart(track: TrackId, audioKey: String): AudioFile =
+        AudioFile(File(dirOf(track), "download-${hash(audioKey)}.part").path)
+
+    override suspend fun discardOtherDownloads(track: TrackId, keep: AudioFile) {
+        withContext(Dispatchers.IO) {
+            dirOf(track).listFiles { f -> f.name.startsWith("download-") && f.path != keep.path }?.forEach { it.delete() }
+        }
+    }
+
+    override suspend fun commitDownload(track: TrackId, part: AudioFile) = withContext(Dispatchers.IO) {
+        val target = File(originalAudio(track).path)
+        target.parentFile?.mkdirs()
+        if (!File(part.path).renameTo(target)) throw IOException("could not move ${part.path} to $target")
+    }
+
     override suspend fun commitOriginalAudio(staged: StagedFile, track: TrackId) = withContext(Dispatchers.IO) {
         val target = File(originalAudio(track).path)
         target.parentFile?.mkdirs()

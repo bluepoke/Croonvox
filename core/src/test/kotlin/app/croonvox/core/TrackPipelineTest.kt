@@ -4,6 +4,9 @@ package app.croonvox.core
 import app.croonvox.core.library.ImportLocalFile
 import app.croonvox.core.model.PipelineStep
 import app.croonvox.core.model.SeparationModelId
+import app.croonvox.core.model.SourceId
+import app.croonvox.core.model.Track
+import app.croonvox.core.model.TrackId
 import app.croonvox.core.model.TrackPipelineState
 import app.croonvox.core.pipeline.TrackPipeline
 import app.croonvox.core.port.SeparationProgress
@@ -26,7 +29,8 @@ class TrackPipelineTest {
     private val jobs = FakePipelineJobs()
     private val import = ImportLocalFile(tracks, files)
     private val fast = SeparationModelId("fast")
-    private val pipeline = TrackPipeline(tracks, jobs, defaultModel = fast)
+    private val youtube = SourceId("youtube")
+    private val pipeline = TrackPipeline(tracks, jobs, defaultModel = fast, downloadFrom = setOf(youtube))
 
     private fun TestScope.startPipeline() {
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { pipeline.run() }
@@ -71,5 +75,32 @@ class TrackPipelineTest {
 
         assertEquals(List(2) { FakePipelineJobs.Separation(track.id, fast) }, jobs.separations)
         assertEquals(TrackPipelineState.Separating(fast), tracks.get(track.id)?.pipeline)
+    }
+
+    @Test
+    fun `an added Track of a network Source is queued for download, an unfinished local import is not`() = runTest {
+        startPipeline()
+
+        val found = tracks.addIfAbsent(Track(TrackId(youtube, "beat-it"), "Beat It", null, null, TrackPipelineState.Added))
+        val unfinishedImport = tracks.addIfAbsent(Track(TrackId(SourceId.Local, "abc"), "Song", null, null, TrackPipelineState.Added))
+
+        assertEquals(listOf(found.id), jobs.downloads)
+        assertEquals(TrackPipelineState.Downloading(), tracks.get(found.id)?.pipeline)
+        assertEquals(TrackPipelineState.Added, tracks.get(unfinishedImport.id)?.pipeline)
+    }
+
+    @Test
+    fun `at start an interrupted download is queued again once, and a failed one can be retried`() = runTest {
+        val interrupted = tracks.addIfAbsent(Track(TrackId(youtube, "a"), "A", null, null, TrackPipelineState.Downloading(0.4f)))
+        val failed = tracks.addIfAbsent(
+            Track(TrackId(youtube, "b"), "B", null, null, TrackPipelineState.Failed(PipelineStep.Downloading, "connection lost")),
+        )
+
+        startPipeline()
+        tracks.updatePipeline(interrupted.id, TrackPipelineState.Downloading(0.5f)) // its job reports progress
+        pipeline.retry(failed.id)
+
+        assertEquals(listOf(interrupted.id, failed.id), jobs.downloads)
+        assertEquals(TrackPipelineState.Downloading(), tracks.get(failed.id)?.pipeline)
     }
 }

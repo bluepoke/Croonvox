@@ -9,6 +9,13 @@ import app.croonvox.core.port.SeparationProgress
 /** User-facing name of a Track Pipeline state. */
 fun TrackPipelineState.label(): String = when (this) {
     TrackPipelineState.Added -> "Added"
+    is TrackPipelineState.Downloading -> progress.let { p ->
+        when {
+            retryReason != null -> "Download paused, retrying soon"
+            p != null -> "Downloading ${percent(p)}"
+            else -> "Waiting to download"
+        }
+    }
     TrackPipelineState.Downloaded -> "Downloaded"
     is TrackPipelineState.Separating -> progress.let { p ->
         when (p?.stage) {

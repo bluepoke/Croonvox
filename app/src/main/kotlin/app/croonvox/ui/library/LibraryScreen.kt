@@ -21,6 +21,7 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -41,7 +42,7 @@ import app.croonvox.ui.subtitle
 import app.croonvox.ui.theme.CroonvoxTheme
 
 @Composable
-fun LibraryRoute(library: Library, importer: Importer, onOpen: (TrackId) -> Unit) {
+fun LibraryRoute(library: Library, importer: Importer, onOpen: (TrackId) -> Unit, onSearch: (() -> Unit)? = null) {
     val viewModel: LibraryViewModel = viewModel(factory = viewModelFactory { initializer { LibraryViewModel(library) } })
     val state by viewModel.state.collectAsStateWithLifecycle()
     val importing by importer.importing.collectAsStateWithLifecycle()
@@ -53,6 +54,7 @@ fun LibraryRoute(library: Library, importer: Importer, onOpen: (TrackId) -> Unit
         importing = importing > 0,
         onImport = { picker.launch(arrayOf("audio/*", "video/*")) },
         onOpen = onOpen,
+        onSearch = onSearch,
     )
 }
 
@@ -63,9 +65,16 @@ fun LibraryScreen(
     importing: Boolean = false,
     onImport: () -> Unit = {},
     onOpen: (TrackId) -> Unit = {},
+    /** Opens the search; null when the app has no network Sources (local flavor). */
+    onSearch: (() -> Unit)? = null,
 ) {
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Library") }) },
+        topBar = {
+            TopAppBar(
+                title = { Text("Library") },
+                actions = { if (onSearch != null) TextButton(onClick = onSearch) { Text("Search songs") } },
+            )
+        },
         floatingActionButton = { ExtendedFloatingActionButton(onClick = onImport) { Text("Import file") } },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {

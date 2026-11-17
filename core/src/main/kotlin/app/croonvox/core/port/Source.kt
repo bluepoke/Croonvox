@@ -11,7 +11,13 @@ import app.croonvox.core.model.TrackId
 interface Source {
     val id: SourceId
 
+    /** The service's name as users know it, e.g. "YouTube". */
+    val name: String
+
     suspend fun search(query: String): List<SourceCandidate>
+
+    /** The item a link (shared into the app) points to, or null if the link isn't this Source's. */
+    suspend fun lookUp(url: String): SourceCandidate?
 
     /** Where the media for [sourceTrackId] can be read from right now (stream URL or file). */
     suspend fun resolve(sourceTrackId: String): ResolvedMedia
@@ -21,9 +27,15 @@ interface Source {
 data class SourceCandidate(
     val id: TrackId,
     val title: String,
+    /** Who published it (e.g. the channel); often, but not always, the artist. */
     val artist: String?,
     val durationMs: Long?,
+    val thumbnailUrl: String? = null,
 )
 
-/** Readable locations of a candidate's media, as URIs the platform layer understands. */
-data class ResolvedMedia(val audioUri: String, val videoUri: String?)
+/**
+ * Readable locations of a candidate's media, as URIs the platform layer understands. Stream URIs
+ * may expire; [audioKey] names the audio stream itself (format and quality), so a download
+ * resumed with a freshly resolved URI can tell whether it is still the same file.
+ */
+data class ResolvedMedia(val audioUri: String, val audioKey: String, val videoUri: String?)

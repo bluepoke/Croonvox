@@ -9,7 +9,15 @@ import app.croonvox.core.port.SourceCandidate
 
 /** In-memory [Source]: search matches the query against title and artist, case-insensitively. */
 class FakeSource(override val id: SourceId) : Source {
+    override val name: String get() = id.value
+
     private val catalogue = mutableListOf<SourceCandidate>()
+
+    /** What [resolve] names the audio stream; change it to model the Source offering another format. */
+    var audioKey = "fake-audio"
+
+    /** Thrown by [resolve] while set. */
+    var resolveFailure: Exception? = null
 
     fun add(sourceTrackId: String, title: String, artist: String? = null, durationMs: Long? = null): SourceCandidate =
         SourceCandidate(TrackId(id, sourceTrackId), title, artist, durationMs).also { catalogue += it }
@@ -19,8 +27,18 @@ class FakeSource(override val id: SourceId) : Source {
             c.title.contains(query, ignoreCase = true) || c.artist?.contains(query, ignoreCase = true) == true
         }
 
+    /** Where [resolve] says the audio of [sourceTrackId] is. */
+    fun audioUriOf(sourceTrackId: String) = "fake://${TrackId(id, sourceTrackId).key}/audio"
+
+    /** The link that [lookUp] recognises for [sourceTrackId]. */
+    fun urlOf(sourceTrackId: String) = "https://${id.value}.example/${sourceTrackId}"
+
+    override suspend fun lookUp(url: String): SourceCandidate? =
+        catalogue.firstOrNull { urlOf(it.id.sourceTrackId) == url }
+
     override suspend fun resolve(sourceTrackId: String): ResolvedMedia {
+        resolveFailure?.let { throw it }
         require(catalogue.any { it.id.sourceTrackId == sourceTrackId }) { "unknown $sourceTrackId" }
-        return ResolvedMedia(audioUri = "fake://${TrackId(id, sourceTrackId).key}/audio", videoUri = null)
+        return ResolvedMedia(audioUri = audioUriOf(sourceTrackId), audioKey = audioKey, videoUri = null)
     }
 }

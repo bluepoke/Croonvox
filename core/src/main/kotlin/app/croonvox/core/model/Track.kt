@@ -14,7 +14,7 @@ data class Track(
     /** The Original Audio is stored, so the Track can be played and sung (ADR 10). */
     val hasOriginalAudio: Boolean
         get() = when (pipeline) {
-            TrackPipelineState.Added -> false
+            TrackPipelineState.Added, is TrackPipelineState.Downloading -> false
             TrackPipelineState.Downloaded, is TrackPipelineState.Separating, is TrackPipelineState.Ready -> true
             is TrackPipelineState.Failed -> pipeline.step != PipelineStep.Downloading
         }
@@ -42,6 +42,17 @@ value class SourceId(val value: String) {
 sealed interface TrackPipelineState {
     /** Known to the Library; nothing downloaded yet. */
     data object Added : TrackPipelineState
+
+    /**
+     * The Original Audio is being downloaded; [progress] (0..1) is null until it has started.
+     * After a failure that may pass, [retryReason] says why it waits for its next try, and
+     * [failedAttempts] counts the tries that failed so far.
+     */
+    data class Downloading(
+        val progress: Float? = null,
+        val retryReason: String? = null,
+        val failedAttempts: Int = 0,
+    ) : TrackPipelineState
 
     /** Original Audio is stored locally; a Session can start (ADR 10). */
     data object Downloaded : TrackPipelineState

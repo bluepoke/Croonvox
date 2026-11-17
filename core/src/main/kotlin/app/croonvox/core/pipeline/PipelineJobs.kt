@@ -15,6 +15,9 @@ interface PipelineJobs {
      */
     fun separate(track: TrackId, model: SeparationModelId)
 
+    /** Queues [DownloadTrack] for [track]. Calling it again is harmless. */
+    fun download(track: TrackId)
+
     /**
      * Queues [app.croonvox.core.lyrics.FetchLyrics] for [track], to run once there is a network.
      * Calling it again is harmless.

@@ -21,6 +21,10 @@ class TrackEntityTest {
     fun `every Track Pipeline state is stored and read back unchanged`() {
         val states = listOf(
             TrackPipelineState.Added,
+            TrackPipelineState.Downloading(),
+            TrackPipelineState.Downloading(0.42f),
+            TrackPipelineState.Downloading(0.42f, retryReason = "the connection broke", failedAttempts = 2),
+            TrackPipelineState.Downloading(null, retryReason = "no network", failedAttempts = 1),
             TrackPipelineState.Downloaded,
             TrackPipelineState.Separating(model),
             TrackPipelineState.Separating(model, SeparationProgress(SeparationProgress.Stage.DownloadingModel, 0.25f)),

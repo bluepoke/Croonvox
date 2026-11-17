@@ -19,6 +19,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -57,7 +58,11 @@ class TrackDetailViewModel(
     private var resumed = false
 
     init {
-        open()
+        // A Track still downloading opens once its Original Audio is there.
+        viewModelScope.launch {
+            track.first { it?.hasOriginalAudio == true }
+            open()
+        }
         // A Session opened from here releases the Audio Engine only after this screen resumes.
         viewModelScope.launch { playback.collect { if (resumed) reopenIfReleased() } }
         // Separation finished while this screen is open: switch to the Instrumental (ADR 10).

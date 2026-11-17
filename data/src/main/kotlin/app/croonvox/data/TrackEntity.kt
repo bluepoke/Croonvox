@@ -21,9 +21,9 @@ internal data class TrackEntity(
     @ColumnInfo(name = "duration_ms") val durationMs: Long?,
     @ColumnInfo(name = "pipeline_state") val pipelineState: String,
     @ColumnInfo(name = "added_at") val addedAt: Long,
-    /** Progress of a running step, e.g. `separating:0.42` (version 3, #7). */
+    /** Progress of a running step, e.g. `separating:0.42` (version 3, #7) or `downloading:0.42:1` (#6). */
     @ColumnInfo(name = "pipeline_progress") val pipelineProgress: String? = null,
-    /** Why the Track is Failed (version 3, #7). */
+    /** Why the Track is Failed (version 3, #7), or why a download waits to retry (#6). */
     @ColumnInfo(name = "pipeline_failure") val pipelineFailure: String? = null,
 )
 
@@ -55,6 +55,9 @@ internal data class PipelineColumns(val state: String, val progress: String? = n
 
 internal fun TrackPipelineState.toColumns(): PipelineColumns = when (this) {
     TrackPipelineState.Added -> PipelineColumns("added")
+    // progress `downloading:<fraction or empty>:<failed attempts>`, failure the reason it waits to retry
+    is TrackPipelineState.Downloading ->
+        PipelineColumns("downloading", progress = "downloading:${progress ?: ""}:$failedAttempts", failure = retryReason)
     TrackPipelineState.Downloaded -> PipelineColumns("downloaded")
     is TrackPipelineState.Separating -> PipelineColumns("$SEPARATING_PREFIX${model.value}", progress = progress?.toColumn())
     is TrackPipelineState.Ready -> PipelineColumns("$READY_PREFIX${model.value}")
@@ -63,6 +66,14 @@ internal fun TrackPipelineState.toColumns(): PipelineColumns = when (this) {
 
 private fun PipelineColumns.toState(): TrackPipelineState = when {
     state == "added" -> TrackPipelineState.Added
+    state == "downloading" -> {
+        val parts = progress?.split(':').orEmpty()
+        TrackPipelineState.Downloading(
+            progress = parts.getOrNull(1)?.toFloatOrNull(),
+            retryReason = failure,
+            failedAttempts = parts.getOrNull(2)?.toIntOrNull() ?: 0,
+        )
+    }
     state == "downloaded" -> TrackPipelineState.Downloaded
     state.startsWith(SEPARATING_PREFIX) ->
         TrackPipelineState.Separating(SeparationModelId(state.removePrefix(SEPARATING_PREFIX)), progress?.let(::progressFromColumn))

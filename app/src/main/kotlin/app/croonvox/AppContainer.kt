@@ -3,6 +3,7 @@ package app.croonvox
 
 import android.content.Context
 import androidx.work.WorkManager
+import app.croonvox.core.library.AddSharedLink
 import app.croonvox.core.library.ImportLocalFile
 import app.croonvox.core.library.Library
 import app.croonvox.core.library.TrackFiles
@@ -12,12 +13,14 @@ import app.croonvox.core.lyrics.LyricsOffset
 import app.croonvox.core.lyrics.LyricsPipeline
 import app.croonvox.core.lyrics.LyricsRepository
 import app.croonvox.core.lyrics.MatchLyrics
+import app.croonvox.core.pipeline.DownloadTrack
 import app.croonvox.core.pipeline.SeparateTrack
 import app.croonvox.core.pipeline.TrackPipeline
 import app.croonvox.core.player.TrackPlayer
 import app.croonvox.core.port.AudioEngine
 import app.croonvox.core.port.LyricsProvider
 import app.croonvox.core.port.Separator
+import app.croonvox.core.port.Source
 import app.croonvox.core.session.Sessions
 import app.croonvox.core.session.SettingsRepository
 import app.croonvox.core.session.TakeRepository
@@ -28,7 +31,9 @@ import app.croonvox.data.RoomSettingsRepository
 import app.croonvox.data.RoomTakeRepository
 import app.croonvox.data.RoomTrackRepository
 import app.croonvox.engine.OboeAudioEngine
+import app.croonvox.downloading.HttpMediaDownloader
 import app.croonvox.importing.Importer
+import app.croonvox.importing.LinkImporter
 import app.croonvox.lyrics.LrclibProvider
 import app.croonvox.separating.EngineDecoder
 import app.croonvox.separating.EngineFlac
@@ -71,7 +76,14 @@ class AppContainer(private val context: Context) {
     }
     val separateTrack: SeparateTrack by lazy { SeparateTrack(trackRepository, trackFiles, separator) }
     private val pipelineJobs by lazy { WorkManagerPipelineJobs(workManager) }
-    val trackPipeline: TrackPipeline by lazy { TrackPipeline(trackRepository, pipelineJobs, SeparationCatalogue.default.id) }
+    val trackPipeline: TrackPipeline by lazy {
+        TrackPipeline(trackRepository, pipelineJobs, SeparationCatalogue.default.id, downloadFrom = sources.map { it.id }.toSet())
+    }
+
+    // Network Sources (ADR 1): none in the local flavor.
+    val sources: List<Source> by lazy { FlavorSources.create() }
+    val downloadTrack: DownloadTrack by lazy { DownloadTrack(trackRepository, trackFiles, sources, HttpMediaDownloader()) }
+    val linkImporter: LinkImporter by lazy { LinkImporter(appScope, AddSharedLink(sources, library)) }
 
     // Lyrics (ADR 6): searched on LRCLIB for every Track, beside the Track Pipeline.
     val lyricsRepository: LyricsRepository by lazy { RoomLyricsRepository(database) }

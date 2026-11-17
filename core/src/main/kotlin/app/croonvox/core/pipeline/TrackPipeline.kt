@@ -4,17 +4,21 @@ package app.croonvox.core.pipeline
 import app.croonvox.core.library.TrackRepository
 import app.croonvox.core.model.PipelineStep
 import app.croonvox.core.model.SeparationModelId
+import app.croonvox.core.model.SourceId
 import app.croonvox.core.model.TrackId
 import app.croonvox.core.model.TrackPipelineState
 
 /**
- * Moves Tracks through the Track Pipeline (ADR 10): every Track that reaches Downloaded is
- * queued for Separation with [defaultModel].
+ * Moves Tracks through the Track Pipeline (ADR 10): a Track added from one of the network Sources
+ * in [downloadFrom] is queued for download, and every Track that reaches Downloaded is queued for
+ * Separation with [defaultModel]. Local imports aren't downloaded: a local Track left in Added is
+ * an import that never finished, and importing the file again completes it.
  */
 class TrackPipeline(
     private val tracks: TrackRepository,
     private val jobs: PipelineJobs,
     private val defaultModel: SeparationModelId,
+    private val downloadFrom: Set<SourceId> = emptySet(),
 ) {
     /** Follows the Library until cancelled; runs for the lifetime of the app process. */
     suspend fun run() {
@@ -24,6 +28,13 @@ class TrackPipeline(
         tracks.observeAll().collect { all ->
             for (track in all) {
                 when (val state = track.pipeline) {
+                    TrackPipelineState.Added -> if (track.id.source in downloadFrom) {
+                        tracks.updatePipeline(track.id, TrackPipelineState.Downloading())
+                        queued += track.id
+                        jobs.download(track.id)
+                    }
+                    // Left Downloading by an earlier process (or queued above): make sure its job exists.
+                    is TrackPipelineState.Downloading -> if (queued.add(track.id)) jobs.download(track.id)
                     TrackPipelineState.Downloaded -> {
                         tracks.updatePipeline(track.id, TrackPipelineState.Separating(defaultModel))
                         queued += track.id
@@ -38,13 +49,16 @@ class TrackPipeline(
     }
 
     /**
-     * Runs a failed Separation again: the Track goes back to Downloaded (its Original Audio is
-     * still stored), and [run] queues it like a newly downloaded Track.
+     * Runs a failed step again. The Track goes back to where that step starts, and [run] queues it
+     * like a new one: Added for a download (continuing after the bytes it has), Downloaded for a
+     * Separation (its Original Audio is still stored).
      */
     suspend fun retry(id: TrackId) {
-        val state = tracks.get(id)?.pipeline
-        if (state is TrackPipelineState.Failed && state.step == PipelineStep.Separating) {
-            tracks.updatePipeline(id, TrackPipelineState.Downloaded)
+        val state = tracks.get(id)?.pipeline as? TrackPipelineState.Failed ?: return
+        val restart = when (state.step) {
+            PipelineStep.Downloading -> TrackPipelineState.Added
+            PipelineStep.Separating -> TrackPipelineState.Downloaded
         }
+        tracks.updatePipeline(id, restart)
     }
 }

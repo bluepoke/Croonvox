@@ -11,6 +11,13 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // NewPipeExtractor is published on JitPack only (ADR 1); nothing else comes from there.
+        maven("https://jitpack.io") {
+            content {
+                includeGroup("com.github.teamnewpipe")
+                includeGroup("com.github.TeamNewPipe") // its nanojson fork
+            }
+        }
     }
 }
 
@@ -22,6 +29,7 @@ include(":data")
 include(":engine")
 include(":separation")
 include(":lyrics")
+include(":newpipe")
 
 // Throwaway spikes (not shipped).
 include(":spikes:audio-engine")

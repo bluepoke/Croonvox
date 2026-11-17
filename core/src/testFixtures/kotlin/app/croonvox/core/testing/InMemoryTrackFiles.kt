@@ -51,6 +51,26 @@ class InMemoryTrackFiles : TrackFiles {
         return StagedFile(file, sha256)
     }
 
+    private val parts = mutableMapOf<AudioFile, ByteArray>()
+
+    override fun downloadPart(track: TrackId, audioKey: String) = AudioFile("/mem/${track.key}/download-$audioKey")
+
+    /** What a download stored so far in [part]. */
+    fun partContent(part: AudioFile): ByteArray = parts[part] ?: ByteArray(0)
+
+    /** Adds [bytes] to the end of [part], as a resumed download does. */
+    fun appendToPart(part: AudioFile, bytes: ByteArray) {
+        parts[part] = partContent(part) + bytes
+    }
+
+    override suspend fun discardOtherDownloads(track: TrackId, keep: AudioFile) {
+        parts.keys.removeAll { it != keep && it.path.startsWith("/mem/${track.key}/download-") }
+    }
+
+    override suspend fun commitDownload(track: TrackId, part: AudioFile) {
+        originals[track] = checkNotNull(parts.remove(part)) { "no download in $part" }
+    }
+
     override suspend fun commitOriginalAudio(staged: StagedFile, track: TrackId) {
         originals[track] = checkNotNull(this.staged.remove(staged.file)) { "not staged: ${staged.file}" }
     }

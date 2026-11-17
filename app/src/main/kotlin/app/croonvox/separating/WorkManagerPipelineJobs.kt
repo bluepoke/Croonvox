@@ -11,6 +11,7 @@ import androidx.work.workDataOf
 import app.croonvox.core.model.SeparationModelId
 import app.croonvox.core.model.TrackId
 import app.croonvox.core.pipeline.PipelineJobs
+import app.croonvox.downloading.DownloadWorker
 import app.croonvox.lyricsearch.LyricsWorker
 import java.util.concurrent.TimeUnit
 
@@ -36,6 +37,16 @@ class WorkManagerPipelineJobs(private val workManager: WorkManager) : PipelineJo
         // wrote Failed) would otherwise swallow the new request. A job that finds the Track
         // already done does nothing (SeparateTrack), so a redundant one costs nothing.
         workManager.enqueueUniqueWork("separate:${track.key}", ExistingWorkPolicy.APPEND_OR_REPLACE, request)
+    }
+
+    override fun download(track: TrackId) {
+        val request = OneTimeWorkRequestBuilder<DownloadWorker>()
+            .setInputData(workDataOf(DownloadWorker.SOURCE to track.source.value, DownloadWorker.SOURCE_TRACK_ID to track.sourceTrackId))
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
+            .build()
+        // Like Separation: queued behind a job still running, which a retry may race with.
+        workManager.enqueueUniqueWork("download:${track.key}", ExistingWorkPolicy.APPEND_OR_REPLACE, request)
     }
 
     override fun fetchLyrics(track: TrackId) {

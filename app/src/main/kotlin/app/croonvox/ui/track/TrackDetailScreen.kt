@@ -33,7 +33,6 @@ import app.croonvox.core.library.TrackRepository
 import app.croonvox.core.lyrics.LyricsRepository
 import app.croonvox.core.lyrics.MatchLyrics
 import app.croonvox.core.lyrics.TrackLyrics
-import app.croonvox.core.model.PipelineStep
 import app.croonvox.core.model.TrackId
 import app.croonvox.core.model.TrackPipelineState
 import app.croonvox.core.pipeline.TrackPipeline
@@ -127,6 +126,7 @@ fun TrackDetailScreen(
             LyricsStatus(lyrics, onConfirmLyrics, onChooseLyrics)
             when {
                 error != null -> Text("Can't play this Track: $error", color = MaterialTheme.colorScheme.error)
+                !canSing -> Unit // nothing to play until the Original Audio is downloaded
                 !ready -> {
                     Text("Preparing audio… ${(loadProgress * 100).toInt()} %", style = MaterialTheme.typography.bodyMedium)
                     LinearProgressIndicator(progress = { loadProgress }, modifier = Modifier.fillMaxWidth())
@@ -186,7 +186,17 @@ private fun PipelineStatus(pipeline: TrackPipelineState, onRetry: () -> Unit) {
         }
         is TrackPipelineState.Failed -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("${pipeline.label()}: ${pipeline.reason}", color = MaterialTheme.colorScheme.error)
-            if (pipeline.step == PipelineStep.Separating) OutlinedButton(onClick = onRetry) { Text("Retry") }
+            OutlinedButton(onClick = onRetry) { Text("Retry") }
+        }
+        is TrackPipelineState.Downloading -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(pipeline.label(), style = MaterialTheme.typography.bodyMedium)
+            pipeline.retryReason?.let { Text("Last try: $it", style = MaterialTheme.typography.bodySmall, color = muted) }
+            val progress = pipeline.progress
+            if (progress == null) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            } else {
+                LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
+            }
         }
         is TrackPipelineState.Ready -> Text("Playing the instrumental", style = MaterialTheme.typography.bodySmall, color = muted)
         TrackPipelineState.Added, TrackPipelineState.Downloaded -> Text(pipeline.label(), style = MaterialTheme.typography.bodySmall, color = muted)

@@ -32,6 +32,18 @@ interface TrackFiles {
      */
     suspend fun stage(content: InputStream): StagedFile
 
+    /**
+     * Where the download of [track]'s audio stream [audioKey] collects its bytes until complete.
+     * The same key always gives the same file, so an interrupted download continues there.
+     */
+    fun downloadPart(track: TrackId, audioKey: String): AudioFile
+
+    /** Deletes [track]'s download parts other than [keep] (left by a stream the Source no longer offers). */
+    suspend fun discardOtherDownloads(track: TrackId, keep: AudioFile)
+
+    /** Moves a complete download into place as the Original Audio of [track]. */
+    suspend fun commitDownload(track: TrackId, part: AudioFile)
+
     /** Moves a staged file into place as the Original Audio of [track]. */
     suspend fun commitOriginalAudio(staged: StagedFile, track: TrackId)
 

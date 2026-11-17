@@ -15,6 +15,13 @@ class FakePipelineJobs : PipelineJobs {
         separations += Separation(track, model)
     }
 
+    /** Tracks whose download was queued, in order. */
+    val downloads = mutableListOf<TrackId>()
+
+    override fun download(track: TrackId) {
+        downloads += track
+    }
+
     /** Tracks whose Lyrics search was queued, in order. */
     val lyricsFetches = mutableListOf<TrackId>()
 

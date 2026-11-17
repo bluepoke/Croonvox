@@ -48,6 +48,9 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // NewPipeExtractor (network flavor) uses java.nio APIs Android has only from API 33. The
+        // option applies to every flavor; the local one just doesn't use what it adds.
+        isCoreLibraryDesugaringEnabled = true
     }
 
     packaging {
@@ -61,6 +64,9 @@ dependencies {
     implementation(project(":engine"))
     implementation(project(":separation"))
     implementation(project(":lyrics"))
+    // ADR 1: the NewPipe Sources ship in the network flavor only.
+    "networkImplementation"(project(":newpipe"))
+    coreLibraryDesugaring(libs.desugar.jdk.libs.nio)
     implementation(libs.onnxruntime.android)
     implementation(libs.core.ktx)
     implementation(libs.kotlinx.coroutines.android)
