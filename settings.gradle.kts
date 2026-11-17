@@ -21,6 +21,7 @@ include(":core")
 include(":data")
 include(":engine")
 include(":separation")
+include(":lyrics")
 
 // Throwaway spikes (not shipped).
 include(":spikes:audio-engine")

@@ -20,6 +20,7 @@ import app.croonvox.core.model.SourceId
 import app.croonvox.core.model.TrackId
 import app.croonvox.importing.Importer
 import app.croonvox.ui.library.LibraryRoute
+import app.croonvox.ui.lyrics.LyricsSearchRoute
 import app.croonvox.ui.session.SessionRoute
 import app.croonvox.ui.theme.CroonvoxTheme
 import app.croonvox.ui.track.TrackDetailRoute
@@ -55,7 +56,12 @@ class MainActivity : ComponentActivity() {
                         val args = checkNotNull(entry.arguments)
                         val id = TrackId(SourceId(checkNotNull(args.getString("source"))), checkNotNull(args.getString("id")))
                         // ViewModels here are scoped to this back-stack entry and cleared on Back.
-                        TrackDetailRoute(id, container.trackRepository, container.trackPlayer, container.trackPipeline, onSing = { nav.openSession(id) })
+                        TrackDetailRoute(
+                            id, container.trackRepository, container.trackPlayer, container.trackPipeline,
+                            container.lyricsRepository, container.matchLyrics,
+                            onSing = { nav.openSession(id) },
+                            onChooseLyrics = { nav.navigate(route(LYRICS, id)) },
+                        )
                     }
                     composable(
                         SESSION,
@@ -63,7 +69,15 @@ class MainActivity : ComponentActivity() {
                     ) { entry ->
                         val args = checkNotNull(entry.arguments)
                         val id = TrackId(SourceId(checkNotNull(args.getString("source"))), checkNotNull(args.getString("id")))
-                        SessionRoute(id, container.sessions)
+                        SessionRoute(id, container.sessions, container.lyricsRepository)
+                    }
+                    composable(
+                        LYRICS,
+                        arguments = listOf(navArgument("source") { type = NavType.StringType }, navArgument("id") { type = NavType.StringType }),
+                    ) { entry ->
+                        val args = checkNotNull(entry.arguments)
+                        val id = TrackId(SourceId(checkNotNull(args.getString("source"))), checkNotNull(args.getString("id")))
+                        LyricsSearchRoute(id, container.matchLyrics, onChosen = { nav.popBackStack() })
                     }
                 }
             }
@@ -99,5 +113,10 @@ class MainActivity : ComponentActivity() {
         const val LIBRARY = "library"
         const val TRACK = "track/{source}/{id}"
         const val SESSION = "session/{source}/{id}"
+        const val LYRICS = "lyrics/{source}/{id}"
+
+        /** [pattern] (e.g. [LYRICS]) filled in for [id]. */
+        fun route(pattern: String, id: TrackId) =
+            pattern.replace("{source}", Uri.encode(id.source.value)).replace("{id}", Uri.encode(id.sourceTrackId))
     }
 }

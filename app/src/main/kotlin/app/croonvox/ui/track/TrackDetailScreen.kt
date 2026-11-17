@@ -30,6 +30,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import app.croonvox.core.library.TrackRepository
+import app.croonvox.core.lyrics.LyricsRepository
+import app.croonvox.core.lyrics.MatchLyrics
+import app.croonvox.core.lyrics.TrackLyrics
 import app.croonvox.core.model.PipelineStep
 import app.croonvox.core.model.TrackId
 import app.croonvox.core.model.TrackPipelineState
@@ -38,6 +41,8 @@ import app.croonvox.core.player.TrackPlayer
 import app.croonvox.core.port.Playback
 import app.croonvox.ui.formatTime
 import app.croonvox.ui.label
+import app.croonvox.ui.lyrics.details
+import app.croonvox.ui.lyrics.name
 
 @Composable
 fun TrackDetailRoute(
@@ -45,11 +50,15 @@ fun TrackDetailRoute(
     tracks: TrackRepository,
     player: TrackPlayer,
     pipeline: TrackPipeline,
+    lyrics: LyricsRepository,
+    match: MatchLyrics,
     onSing: () -> Unit,
+    onChooseLyrics: () -> Unit,
 ) {
     val viewModel: TrackDetailViewModel = viewModel(
-        factory = viewModelFactory { initializer { TrackDetailViewModel(id, tracks, player, pipeline) } },
+        factory = viewModelFactory { initializer { TrackDetailViewModel(id, tracks, player, pipeline, lyrics, match) } },
     )
+    val trackLyrics by viewModel.lyrics.collectAsStateWithLifecycle()
     val track by viewModel.track.collectAsStateWithLifecycle()
     val playback by viewModel.playback.collectAsStateWithLifecycle()
     val ready by viewModel.ready.collectAsStateWithLifecycle()
@@ -72,6 +81,9 @@ fun TrackDetailRoute(
         onTogglePlay = viewModel::togglePlay,
         onSeek = viewModel::seekTo,
         onRetry = viewModel::retry,
+        lyrics = trackLyrics,
+        onConfirmLyrics = viewModel::confirmLyrics,
+        onChooseLyrics = onChooseLyrics,
         onSing = {
             viewModel.pause()
             onSing()
@@ -93,6 +105,9 @@ fun TrackDetailScreen(
     onTogglePlay: () -> Unit,
     onSeek: (Long) -> Unit,
     onRetry: () -> Unit,
+    lyrics: TrackLyrics?,
+    onConfirmLyrics: () -> Unit,
+    onChooseLyrics: () -> Unit,
     onSing: () -> Unit,
 ) {
     Scaffold(
@@ -109,6 +124,7 @@ fun TrackDetailScreen(
                 Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             if (pipeline != null) PipelineStatus(pipeline, onRetry)
+            LyricsStatus(lyrics, onConfirmLyrics, onChooseLyrics)
             when {
                 error != null -> Text("Can't play this Track: $error", color = MaterialTheme.colorScheme.error)
                 !ready -> {
@@ -174,5 +190,42 @@ private fun PipelineStatus(pipeline: TrackPipelineState, onRetry: () -> Unit) {
         }
         is TrackPipelineState.Ready -> Text("Playing the instrumental", style = MaterialTheme.typography.bodySmall, color = muted)
         TrackPipelineState.Added, TrackPipelineState.Downloaded -> Text(pipeline.label(), style = MaterialTheme.typography.bodySmall, color = muted)
+    }
+}
+
+/** Which Lyrics the Track has, and how to confirm or change them (ADR 6). */
+@Composable
+private fun LyricsStatus(lyrics: TrackLyrics?, onConfirm: () -> Unit, onChoose: () -> Unit) {
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text("Lyrics", style = MaterialTheme.typography.titleSmall)
+        when (lyrics) {
+            null, TrackLyrics.Searching -> {
+                // Waits for a network; the user needn't.
+                Text("Searching…", style = MaterialTheme.typography.bodySmall, color = muted)
+                OutlinedButton(onClick = onChoose) { Text("Search") }
+            }
+            is TrackLyrics.Suggested -> {
+                Text("Suggested: ${lyrics.lyrics.name()}", style = MaterialTheme.typography.bodyMedium)
+                Text(lyrics.lyrics.details(), style = MaterialTheme.typography.bodySmall, color = muted)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = onConfirm) { Text("Confirm") }
+                    OutlinedButton(onClick = onChoose) { Text("Choose another") }
+                }
+            }
+            is TrackLyrics.Confirmed -> {
+                Text(lyrics.lyrics.name(), style = MaterialTheme.typography.bodyMedium)
+                Text(lyrics.lyrics.details(), style = MaterialTheme.typography.bodySmall, color = muted)
+                OutlinedButton(onClick = onChoose) { Text("Change") }
+            }
+            is TrackLyrics.NotFound -> {
+                Text("No Lyrics found for \"${lyrics.query.title}\".", style = MaterialTheme.typography.bodySmall, color = muted)
+                OutlinedButton(onClick = onChoose) { Text("Search") }
+            }
+            is TrackLyrics.Failed -> {
+                Text("Lyrics search failed: ${lyrics.reason}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                OutlinedButton(onClick = onChoose) { Text("Search") }
+            }
+        }
     }
 }

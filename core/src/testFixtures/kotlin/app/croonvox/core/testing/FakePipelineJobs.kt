@@ -14,4 +14,11 @@ class FakePipelineJobs : PipelineJobs {
     override fun separate(track: TrackId, model: SeparationModelId) {
         separations += Separation(track, model)
     }
+
+    /** Tracks whose Lyrics search was queued, in order. */
+    val lyricsFetches = mutableListOf<TrackId>()
+
+    override fun fetchLyrics(track: TrackId) {
+        lyricsFetches += track
+    }
 }

@@ -5,8 +5,8 @@ import app.croonvox.core.model.SeparationModelId
 import app.croonvox.core.model.TrackId
 
 /**
- * Runs Track Pipeline steps as resumable background jobs that survive process death (ADR 10).
- * Implemented with WorkManager; faked in tests.
+ * Runs background jobs that survive process death (ADR 10): the Track Pipeline's steps, and the
+ * Lyrics search that runs beside it (ADR 6). Implemented with WorkManager; faked in tests.
  */
 interface PipelineJobs {
     /**
@@ -14,4 +14,10 @@ interface PipelineJobs {
      * for the Track. Calling it again is harmless: a job finding the Track done does nothing.
      */
     fun separate(track: TrackId, model: SeparationModelId)
+
+    /**
+     * Queues [app.croonvox.core.lyrics.FetchLyrics] for [track], to run once there is a network.
+     * Calling it again is harmless.
+     */
+    fun fetchLyrics(track: TrackId)
 }

@@ -2,16 +2,22 @@
 package app.croonvox.separating
 
 import androidx.work.BackoffPolicy
+import androidx.work.Constraints
 import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
 import app.croonvox.core.model.SeparationModelId
 import app.croonvox.core.model.TrackId
 import app.croonvox.core.pipeline.PipelineJobs
+import app.croonvox.lyricsearch.LyricsWorker
 import java.util.concurrent.TimeUnit
 
-/** [PipelineJobs] on WorkManager: jobs survive process death and retry with backoff (ADR 10). */
+/**
+ * [PipelineJobs] on WorkManager: jobs survive process death and retry with backoff (ADR 10).
+ * Lyrics searches wait for a network.
+ */
 class WorkManagerPipelineJobs(private val workManager: WorkManager) : PipelineJobs {
     override fun separate(track: TrackId, model: SeparationModelId) {
         val request = OneTimeWorkRequestBuilder<SeparationWorker>()
@@ -30,5 +36,15 @@ class WorkManagerPipelineJobs(private val workManager: WorkManager) : PipelineJo
         // wrote Failed) would otherwise swallow the new request. A job that finds the Track
         // already done does nothing (SeparateTrack), so a redundant one costs nothing.
         workManager.enqueueUniqueWork("separate:${track.key}", ExistingWorkPolicy.APPEND_OR_REPLACE, request)
+    }
+
+    override fun fetchLyrics(track: TrackId) {
+        val request = OneTimeWorkRequestBuilder<LyricsWorker>()
+            .setInputData(workDataOf(LyricsWorker.SOURCE to track.source.value, LyricsWorker.SOURCE_TRACK_ID to track.sourceTrackId))
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
+            .build()
+        // A search that finds the Lyrics settled does nothing (FetchLyrics), so keeping a queued one is enough.
+        workManager.enqueueUniqueWork("lyrics:${track.key}", ExistingWorkPolicy.KEEP, request)
     }
 }

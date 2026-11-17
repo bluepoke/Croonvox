@@ -56,22 +56,26 @@ import app.croonvox.core.model.OutputRoute
 import app.croonvox.core.model.SourceId
 import app.croonvox.core.model.Take
 import app.croonvox.core.model.TakeId
+import app.croonvox.core.lyrics.LyricsRepository
+import app.croonvox.core.lyrics.TrackLyrics
 import app.croonvox.core.model.TrackId
 import app.croonvox.core.port.CapturedTake
 import app.croonvox.core.port.InputLevel
+import app.croonvox.core.port.LyricsCandidate
 import app.croonvox.core.port.Playback
 import app.croonvox.core.session.BackingAudio
 import app.croonvox.core.session.Session
 import app.croonvox.core.session.SessionState
 import app.croonvox.core.session.Sessions
 import app.croonvox.ui.formatTime
+import app.croonvox.ui.lyrics.PageView
 import app.croonvox.ui.theme.CroonvoxTheme
 import kotlin.math.log10
 import kotlin.math.roundToInt
 
 @Composable
-fun SessionRoute(id: TrackId, sessions: Sessions) {
-    val viewModel: SessionViewModel = viewModel(factory = viewModelFactory { initializer { SessionViewModel(id, sessions) } })
+fun SessionRoute(id: TrackId, sessions: Sessions, lyrics: LyricsRepository) {
+    val viewModel: SessionViewModel = viewModel(factory = viewModelFactory { initializer { SessionViewModel(id, sessions, lyrics) } })
     val context = LocalContext.current
     fun micAllowed() = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
 
@@ -106,12 +110,13 @@ fun SessionRoute(id: TrackId, sessions: Sessions) {
     val countdown by viewModel.countdownEnabled.collectAsStateWithLifecycle()
     val reviewBacking by viewModel.reviewBackingDb.collectAsStateWithLifecycle()
     val takes by viewModel.takes.collectAsStateWithLifecycle()
+    val trackLyrics by viewModel.lyrics.collectAsStateWithLifecycle()
 
     SessionScreen(
         title = title,
         openError = openError,
         snackbar = snackbar,
-        content = SessionContent(state, backing, playback, input, gain, countdown, reviewBacking, takes),
+        content = SessionContent(state, backing, playback, input, gain, countdown, reviewBacking, takes, trackLyrics),
         actions = SessionActions(
             onTogglePlay = viewModel::togglePlay,
             onSeek = viewModel::seekTo,
@@ -142,6 +147,7 @@ data class SessionContent(
     /** Backing Audio level while a Take plays back, in dB (Review balance). */
     val reviewBackingDb: Float,
     val takes: List<Take>,
+    val lyrics: TrackLyrics?,
 )
 
 data class SessionActions(
@@ -175,24 +181,34 @@ fun SessionScreen(
         topBar = { TopAppBar(title = { Text(title, maxLines = 1) }) },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
-        Column(
-            modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            when {
-                openError != null -> Text("Can't start a Session: $openError", color = MaterialTheme.colorScheme.error)
-                content.backing == null -> LinearProgressIndicator(Modifier.fillMaxWidth())
-                else -> {
-                    BackingLine(content.backing)
-                    Position(content.state, content.playback, actions.onSeek)
-                    Transport(content.state, content.playback, content.reviewBackingDb, actions)
-                    HorizontalDivider()
-                    Microphone(content.input, content.inputGainDb, actions.onGain)
-                    SettingRow("Countdown before recording (${Session.COUNTDOWN_SECONDS} s)", content.countdownEnabled, actions.onCountdown)
-                    HorizontalDivider()
-                    Takes(content.takes, content.state, actions)
-                }
+        // Lyrics on top (Page View), the Session's controls below; each half scrolls on its own.
+        Column(Modifier.fillMaxSize().padding(padding)) {
+            PageView(content.lyrics, Modifier.weight(1f).fillMaxWidth().padding(16.dp))
+            HorizontalDivider()
+            Column(
+                modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                SessionControls(openError, content, actions)
             }
+        }
+    }
+}
+
+@Composable
+private fun SessionControls(openError: String?, content: SessionContent, actions: SessionActions) {
+    when {
+        openError != null -> Text("Can't start a Session: $openError", color = MaterialTheme.colorScheme.error)
+        content.backing == null -> LinearProgressIndicator(Modifier.fillMaxWidth())
+        else -> {
+            BackingLine(content.backing)
+            Position(content.state, content.playback, actions.onSeek)
+            Transport(content.state, content.playback, content.reviewBackingDb, actions)
+            HorizontalDivider()
+            Microphone(content.input, content.inputGainDb, actions.onGain)
+            SettingRow("Countdown before recording (${Session.COUNTDOWN_SECONDS} s)", content.countdownEnabled, actions.onCountdown)
+            HorizontalDivider()
+            Takes(content.takes, content.state, actions)
         }
     }
 }
@@ -467,6 +483,9 @@ private fun ReviewPreview() {
                 countdownEnabled = true,
                 reviewBackingDb = -20f,
                 takes = listOf(kept),
+                lyrics = TrackLyrics.Confirmed(
+                    LyricsCandidate("1", "Frank Sinatra", "Fly Me to the Moon", 148_000, "Fly me to the moon\nLet me play among the stars", null),
+                ),
             ),
             actions = SessionActions(),
         )

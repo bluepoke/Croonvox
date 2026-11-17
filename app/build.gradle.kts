@@ -60,6 +60,7 @@ dependencies {
     implementation(project(":data"))
     implementation(project(":engine"))
     implementation(project(":separation"))
+    implementation(project(":lyrics"))
     implementation(libs.onnxruntime.android)
     implementation(libs.core.ktx)
     implementation(libs.kotlinx.coroutines.android)

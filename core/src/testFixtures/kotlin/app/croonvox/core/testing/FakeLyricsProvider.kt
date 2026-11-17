@@ -5,10 +5,16 @@ import app.croonvox.core.port.LyricsCandidate
 import app.croonvox.core.port.LyricsProvider
 import app.croonvox.core.port.LyricsQuery
 
-/** In-memory [LyricsProvider]: returns candidates whose title contains the queried title. */
+/**
+ * In-memory [LyricsProvider]: returns candidates whose title contains the queried title and,
+ * if the query has an artist, whose artist contains it.
+ */
 class FakeLyricsProvider : LyricsProvider {
     private val catalogue = mutableListOf<LyricsCandidate>()
     val queries = mutableListOf<LyricsQuery>()
+
+    /** Thrown by every search while set. */
+    var failWith: Exception? = null
 
     fun add(candidate: LyricsCandidate) {
         catalogue += candidate
@@ -16,6 +22,10 @@ class FakeLyricsProvider : LyricsProvider {
 
     override suspend fun search(query: LyricsQuery): List<LyricsCandidate> {
         queries += query
-        return catalogue.filter { it.title.contains(query.title, ignoreCase = true) }
+        failWith?.let { throw it }
+        return catalogue.filter { candidate ->
+            candidate.title.contains(query.title, ignoreCase = true) &&
+                (query.artist == null || candidate.artist?.contains(query.artist, ignoreCase = true) == true)
+        }
     }
 }

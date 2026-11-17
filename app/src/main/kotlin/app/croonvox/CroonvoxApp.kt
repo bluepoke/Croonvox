@@ -13,5 +13,7 @@ class CroonvoxApp : Application() {
         container = AppContainer(this)
         // Downloaded Tracks move on to Separation, also in a process started only for a job.
         container.appScope.launch { container.trackPipeline.run() }
+        // Every Track gets its Lyrics searched, whatever the Track Pipeline is doing.
+        container.appScope.launch { container.lyricsPipeline.run() }
     }
 }

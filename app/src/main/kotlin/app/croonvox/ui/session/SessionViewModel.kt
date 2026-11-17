@@ -3,6 +3,8 @@ package app.croonvox.ui.session
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.croonvox.core.lyrics.LyricsRepository
+import app.croonvox.core.lyrics.TrackLyrics
 import app.croonvox.core.model.Take
 import app.croonvox.core.model.TakeId
 import app.croonvox.core.model.TrackId
@@ -27,7 +29,10 @@ import kotlinx.coroutines.launch
 
 /** Holds one open [Session] for as long as the Session screen is on the back stack. */
 @OptIn(ExperimentalCoroutinesApi::class)
-class SessionViewModel(id: TrackId, sessions: Sessions) : ViewModel() {
+class SessionViewModel(id: TrackId, sessions: Sessions, lyrics: LyricsRepository) : ViewModel() {
+    /** The Track's Lyrics for the Page View; they may still change (e.g. a search finishing). */
+    val lyrics: StateFlow<TrackLyrics?> = lyrics.observe(id).stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
     private val session = MutableStateFlow<Session?>(null)
 
     private val _openError = MutableStateFlow<String?>(null)

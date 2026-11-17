@@ -4,6 +4,9 @@ package app.croonvox.ui.track
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.croonvox.core.library.TrackRepository
+import app.croonvox.core.lyrics.LyricsRepository
+import app.croonvox.core.lyrics.MatchLyrics
+import app.croonvox.core.lyrics.TrackLyrics
 import app.croonvox.core.model.Track
 import app.croonvox.core.model.TrackId
 import app.croonvox.core.model.TrackPipelineState
@@ -24,7 +27,16 @@ class TrackDetailViewModel(
     tracks: TrackRepository,
     private val player: TrackPlayer,
     private val pipeline: TrackPipeline,
+    lyrics: LyricsRepository,
+    private val match: MatchLyrics,
 ) : ViewModel() {
+    val lyrics: StateFlow<TrackLyrics?> = lyrics.observe(id).stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /** Confirms the suggested Lyrics (ADR 6). */
+    fun confirmLyrics() {
+        viewModelScope.launch { match.confirm(id) }
+    }
+
     val track: StateFlow<Track?> = tracks.observe(id).stateIn(viewModelScope, SharingStarted.Eagerly, null)
     val playback: StateFlow<Playback> = player.playback
 

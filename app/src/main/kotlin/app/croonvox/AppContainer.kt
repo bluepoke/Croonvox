@@ -7,21 +7,28 @@ import app.croonvox.core.library.ImportLocalFile
 import app.croonvox.core.library.Library
 import app.croonvox.core.library.TrackFiles
 import app.croonvox.core.library.TrackRepository
+import app.croonvox.core.lyrics.FetchLyrics
+import app.croonvox.core.lyrics.LyricsPipeline
+import app.croonvox.core.lyrics.LyricsRepository
+import app.croonvox.core.lyrics.MatchLyrics
 import app.croonvox.core.pipeline.SeparateTrack
 import app.croonvox.core.pipeline.TrackPipeline
 import app.croonvox.core.player.TrackPlayer
 import app.croonvox.core.port.AudioEngine
+import app.croonvox.core.port.LyricsProvider
 import app.croonvox.core.port.Separator
 import app.croonvox.core.session.Sessions
 import app.croonvox.core.session.SettingsRepository
 import app.croonvox.core.session.TakeRepository
 import app.croonvox.data.AppTrackFiles
 import app.croonvox.data.CroonvoxDatabase
+import app.croonvox.data.RoomLyricsRepository
 import app.croonvox.data.RoomSettingsRepository
 import app.croonvox.data.RoomTakeRepository
 import app.croonvox.data.RoomTrackRepository
 import app.croonvox.engine.OboeAudioEngine
 import app.croonvox.importing.Importer
+import app.croonvox.lyrics.LrclibProvider
 import app.croonvox.separating.EngineDecoder
 import app.croonvox.separating.EngineFlac
 import app.croonvox.separating.WorkManagerPipelineJobs
@@ -62,7 +69,16 @@ class AppContainer(private val context: Context) {
         ModelSeparator(SeparationCatalogue.models, ModelStore(File(context.filesDir, "models")), EngineDecoder, EngineFlac)
     }
     val separateTrack: SeparateTrack by lazy { SeparateTrack(trackRepository, trackFiles, separator) }
-    val trackPipeline: TrackPipeline by lazy {
-        TrackPipeline(trackRepository, WorkManagerPipelineJobs(workManager), SeparationCatalogue.default.id)
+    private val pipelineJobs by lazy { WorkManagerPipelineJobs(workManager) }
+    val trackPipeline: TrackPipeline by lazy { TrackPipeline(trackRepository, pipelineJobs, SeparationCatalogue.default.id) }
+
+    // Lyrics (ADR 6): searched on LRCLIB for every Track, beside the Track Pipeline.
+    val lyricsRepository: LyricsRepository by lazy { RoomLyricsRepository(database) }
+    private val lyricsProvider: LyricsProvider by lazy {
+        val version = context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "dev"
+        LrclibProvider(LrclibProvider.userAgent(version))
     }
+    val fetchLyrics: FetchLyrics by lazy { FetchLyrics(trackRepository, lyricsRepository, lyricsProvider) }
+    val matchLyrics: MatchLyrics by lazy { MatchLyrics(trackRepository, lyricsRepository, lyricsProvider) }
+    val lyricsPipeline: LyricsPipeline by lazy { LyricsPipeline(trackRepository, lyricsRepository, pipelineJobs) }
 }
