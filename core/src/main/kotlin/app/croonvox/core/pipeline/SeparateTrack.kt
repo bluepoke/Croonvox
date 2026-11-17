@@ -16,6 +16,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
+import kotlin.math.floor
 
 /** The Separating step of the Track Pipeline (ADR 10, ADR 15). */
 class SeparateTrack(
@@ -51,7 +52,9 @@ class SeparateTrack(
             else -> return@coroutineScope Outcome.Skipped
         }
         tracks.updatePipeline(id, TrackPipelineState.Separating(model))
-        // The Separator reports from any thread; only the latest progress is worth storing.
+        // The Separator reports from any thread, sometimes many times a second (e.g. per block of a
+        // download). Only the latest progress in whole percent is stored: the flow drops repeats,
+        // so each stage writes the Track (and updates the notification) at most about 100 times.
         val progress = MutableStateFlow<SeparationProgress?>(null)
         val storing = launch {
             progress.filterNotNull().collect { tracks.updatePipeline(id, TrackPipelineState.Separating(model, it)) }
@@ -62,7 +65,7 @@ class SeparateTrack(
                 model = model,
                 into = files.stems(id, model),
                 checkpoint = files.separationCheckpoint(id, model),
-                onProgress = { progress.value = it },
+                onProgress = { progress.value = it.inWholePercent() },
             )
             null
         } catch (e: CancellationException) {
@@ -95,3 +98,5 @@ class SeparateTrack(
         }
     }
 }
+
+private fun SeparationProgress.inWholePercent() = copy(fraction = floor(fraction * 100) / 100)

@@ -129,4 +129,19 @@ class SeparateTrackTest {
         assertEquals(emptyList(), separator.requests)
         assertEquals(failed, tracks.get(track.id)?.pipeline)
     }
+
+    @Test
+    fun `the Track shows progress in whole percent, however finely the Separator reports it`() = runTest {
+        val track = import(FakeLocalFile(displayName = "song.mp3", content = "audio-1"))
+        separator.progress = listOf(SeparationProgress(SeparationProgress.Stage.DownloadingModel, 0.4267f))
+        val expected = TrackPipelineState.Separating(fast, SeparationProgress(SeparationProgress.Stage.DownloadingModel, 0.42f))
+        var shown: TrackPipelineState? = null
+        separator.afterEachProgress = {
+            shown = withTimeout(1_000) { tracks.observe(track.id).map { it?.pipeline }.first { it is TrackPipelineState.Separating && it.progress != null } }
+        }
+
+        separate(track.id, fast)
+
+        assertEquals(expected, shown)
+    }
 }
