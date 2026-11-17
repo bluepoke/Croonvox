@@ -29,6 +29,17 @@ class FakePipelineJobs : PipelineJobs {
         lyricsFetches += track
     }
 
+    /** Tracks whose Separation was cancelled, in order. */
+    val cancelledSeparations = mutableListOf<TrackId>()
+
+    /** Runs while [cancelSeparation] waits for the job to stop, e.g. to act meanwhile. */
+    var onCancelSeparation: suspend () -> Unit = {}
+
+    override suspend fun cancelSeparation(track: TrackId) {
+        cancelledSeparations += track
+        onCancelSeparation()
+    }
+
     /** Tracks whose jobs were cancelled, in order. */
     val cancelled = mutableListOf<TrackId>()
 

@@ -56,3 +56,14 @@ Prerequisites: two Ready Tracks, one with two kept Takes. `adb shell run-as app.
 3. **Delete stems.** Delete the stems of one Track after confirming. The Library shows "Stems deleted" and the stems directory is gone. Open the Track: the Original Audio plays, Separation runs again ("Removing vocals …%"), and playback switches to the Instrumental when it finishes. A kept Take still plays in sync over the new Instrumental.
 4. **Delete a Take.** Delete one Take: it is gone from Storage and from the Session's Take list, and its `.flac` file is gone.
 5. **Delete a Track while separating.** Import a song and, while it shows "Removing vocals", delete it from Storage. The notification goes away, the Track leaves the Library, and its directory under `files/tracks/` is gone and doesn't come back a minute later. Importing the same file again starts fresh.
+
+## Vocal-Free Tracks (#25)
+
+Prerequisites: a karaoke version of a song (audio without a lead vocal) as a local file and as a link, plus a Ready Track with stems. Use `adb shell run-as app.croonvox du -sh files/tracks/*` to check the stems on disk.
+
+1. **Import without vocals.** Library ⋮ → **Import file without vocals**. The Track goes to "Ready · Vocal-Free" right after the import, with no "Removing vocals" and no notification. Track detail says "Playing the original audio", and the toggle is on.
+2. **Search without vocals.** In a search result's sheet, tap **Add without vocal removal**. After the download the Track is Ready without Separating.
+3. **Share, then mark.** Share the karaoke link from a browser. Track detail opens with "No vocals in this song?". Tap **Mark Vocal-Free** while it is still downloading: it becomes Ready without Separating. Share a local file the same way and tap it while "Removing vocals" runs: the notification disappears, the Track is Ready, and no stems directory is left.
+4. **Mark a Ready Track.** On the Track with stems, turn the toggle on. A dialog names the space freed. Confirm: the stems are gone, playback continues on the original audio at the same position, and a kept Take still plays in sync in a Session.
+5. **Unmark.** Turn the toggle off: "Removing vocals" runs, then playback switches to the Instrumental, and Takes stay in sync.
+6. **Re-add.** Import the same file again with **Import file without vocals** while it isn't Vocal-Free: the existing Track opens unchanged and keeps separating.

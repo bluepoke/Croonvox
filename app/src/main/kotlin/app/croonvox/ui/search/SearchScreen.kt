@@ -28,6 +28,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -131,10 +132,11 @@ class SearchViewModel(private val sources: List<Source>, private val library: Li
     /** The app went to the background: a preview doesn't play on there. */
     fun onBackground() = player.pause()
 
-    fun add(candidate: SourceCandidate, then: (TrackId) -> Unit) {
+    /** Adds [candidate], marked Vocal-Free if [vocalFree] (ADR 14); an existing Track opens unchanged. */
+    fun add(candidate: SourceCandidate, vocalFree: Boolean, then: (TrackId) -> Unit) {
         resolving?.cancel()
         player.stop()
-        viewModelScope.launch { then(library.add(candidate).id) }
+        viewModelScope.launch { then(library.add(candidate, vocalFree).id) }
     }
 
     override fun onCleared() = player.stop()
@@ -169,7 +171,8 @@ fun SearchRoute(sources: List<Source>, library: Library, onAdded: (TrackId) -> U
             sourceName = sources.nameOf(candidate),
             player = playing,
             onTogglePlay = viewModel.player::toggle,
-            onAdd = { viewModel.add(candidate, onAdded) },
+            onAdd = { viewModel.add(candidate, vocalFree = false, onAdded) },
+            onAddVocalFree = { viewModel.add(candidate, vocalFree = true, onAdded) },
             onDismiss = viewModel::closePreview,
         )
     }
@@ -238,6 +241,8 @@ private fun PreviewSheet(
     player: PreviewPlayer.State,
     onTogglePlay: () -> Unit,
     onAdd: () -> Unit,
+    /** The secondary add: the result has no vocals, so Separation is skipped (ADR 14). */
+    onAddVocalFree: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
@@ -261,6 +266,7 @@ private fun PreviewSheet(
                 ) { Text(if (player == PreviewPlayer.State.Playing) "Pause" else "Play") }
                 Button(onClick = onAdd) { Text("Add to Library") }
             }
+            TextButton(onClick = onAddVocalFree) { Text("Add without vocal removal") }
             Spacer(Modifier.height(16.dp))
         }
     }

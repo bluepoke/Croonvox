@@ -6,6 +6,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
+import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -45,6 +46,18 @@ internal abstract class TrackDao {
     /** Deletes the row; Takes, Lyrics and Lyrics Offsets go with it (foreign keys cascade). */
     @Query("DELETE FROM tracks WHERE source = :source AND source_track_id = :sourceTrackId")
     abstract suspend fun delete(source: String, sourceTrackId: String)
+
+    @Update
+    protected abstract suspend fun updateRow(track: TrackEntity)
+
+    /** Replaces the row with what [change] makes of it, in one transaction; returns the stored row. */
+    @Transaction
+    open suspend fun update(source: String, sourceTrackId: String, change: (TrackEntity) -> TrackEntity?): TrackEntity? {
+        val row = get(source, sourceTrackId) ?: return null
+        val changed = change(row) ?: return row
+        updateRow(changed)
+        return get(source, sourceTrackId)
+    }
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     protected abstract suspend fun insertOrIgnore(track: TrackEntity): Long

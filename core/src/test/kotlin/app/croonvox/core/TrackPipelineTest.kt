@@ -2,6 +2,7 @@
 package app.croonvox.core
 
 import app.croonvox.core.library.ImportLocalFile
+import app.croonvox.core.library.Library
 import app.croonvox.core.model.PipelineStep
 import app.croonvox.core.model.SeparationModelId
 import app.croonvox.core.model.SourceId
@@ -18,6 +19,7 @@ import app.croonvox.core.testing.InMemoryTakeRepository
 import app.croonvox.core.port.SeparationProgress
 import app.croonvox.core.testing.FakeLocalFile
 import app.croonvox.core.testing.FakePipelineJobs
+import app.croonvox.core.testing.FakeSource
 import app.croonvox.core.testing.InMemoryTrackFiles
 import app.croonvox.core.testing.InMemoryTrackRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -140,5 +142,48 @@ class TrackPipelineTest {
         assertEquals(BackingAudio.OriginalAudio, session.backing.value)
         assertEquals(TrackPipelineState.Separating(fast), tracks.get(track.id)?.pipeline)
         assertEquals(listOf(FakePipelineJobs.Separation(track.id, fast)), jobs.separations)
+    }
+
+    @Test
+    fun `a file imported Vocal-Free goes Downloaded to Ready without Separating`() = runTest {
+        startPipeline()
+
+        val track = import(FakeLocalFile(displayName = "karaoke.mp3", content = "audio-1"), vocalFree = true)
+
+        assertEquals(TrackPipelineState.Ready(model = null), tracks.get(track.id)?.pipeline)
+        assertEquals(true, tracks.get(track.id)?.vocalFree)
+        assertEquals(emptyList(), jobs.separations)
+    }
+
+    @Test
+    fun `a search result added Vocal-Free is downloaded and then becomes Ready without Separating`() = runTest {
+        startPipeline()
+        val library = Library(tracks, InMemoryTakeRepository())
+        val source = FakeSource(youtube).apply { add(sourceTrackId = "karaoke", title = "Fly Me to the Moon (Karaoke)") }
+
+        val track = library.add(source.search("karaoke").single(), vocalFree = true)
+        assertEquals(listOf(track.id), jobs.downloads)
+        tracks.updatePipeline(track.id, TrackPipelineState.Downloaded) // the download finished
+
+        assertEquals(TrackPipelineState.Ready(model = null), tracks.get(track.id)?.pipeline)
+        assertEquals(emptyList(), jobs.separations)
+    }
+
+    @Test
+    fun `adding an existing Track again with the Vocal-Free option leaves it unchanged`() = runTest {
+        startPipeline()
+        val file = FakeLocalFile(displayName = "song.mp3", content = "audio-1")
+        val first = import(file)
+        val library = Library(tracks, InMemoryTakeRepository())
+        val source = FakeSource(youtube).apply { add(sourceTrackId = "v1", title = "Song") }
+        val found = library.add(source.search("song").single())
+
+        val again = import(file, vocalFree = true)
+        val foundAgain = library.add(source.search("song").single(), vocalFree = true)
+
+        assertEquals(false, again.vocalFree)
+        assertEquals(TrackPipelineState.Separating(fast), tracks.get(first.id)?.pipeline)
+        assertEquals(false, foundAgain.vocalFree)
+        assertEquals(false, tracks.get(found.id)?.vocalFree)
     }
 }

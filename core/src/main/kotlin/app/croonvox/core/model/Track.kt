@@ -12,6 +12,11 @@ data class Track(
     val pipeline: TrackPipelineState,
     /** When a Session on the Track was last opened (epoch ms); null if it was never sung. */
     val lastSessionAt: Long? = null,
+    /**
+     * The Original Audio has no lead vocal, so the Track skips Separation and always sings over
+     * its Original Audio (GLOSSARY: Vocal-Free, ADR 14). Set by the user.
+     */
+    val vocalFree: Boolean = false,
 ) {
     /** The Original Audio is stored, so the Track can be played and sung (ADR 10). */
     val hasOriginalAudio: Boolean
@@ -66,8 +71,11 @@ sealed interface TrackPipelineState {
      */
     data class Separating(val model: SeparationModelId, val progress: SeparationProgress? = null) : TrackPipelineState
 
-    /** Separation with [model] has finished: its Instrumental and Vocal Stem are stored. */
-    data class Ready(val model: SeparationModelId) : TrackPipelineState
+    /**
+     * Every step the Track needs is done (ADR 14): Separation with [model] has finished and its
+     * Instrumental and Vocal Stem are stored, or [model] is null for a Vocal-Free Track, which has none.
+     */
+    data class Ready(val model: SeparationModelId?) : TrackPipelineState
 
     /**
      * The stems Separation with [model] produced were deleted to free space (ADR 17). Separation

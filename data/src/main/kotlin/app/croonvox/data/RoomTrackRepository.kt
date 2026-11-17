@@ -27,6 +27,9 @@ class RoomTrackRepository(
     override suspend fun updatePipeline(id: TrackId, state: TrackPipelineState): Track =
         dao.updatePipeline(id.source.value, id.sourceTrackId, state.toColumns()).toTrack()
 
+    override suspend fun update(id: TrackId, change: (Track) -> Track?): Track? =
+        dao.update(id.source.value, id.sourceTrackId) { row -> change(row.toTrack())?.toEntity(addedAt = row.addedAt) }?.toTrack()
+
     override suspend fun delete(id: TrackId) = dao.delete(id.source.value, id.sourceTrackId)
 
     override suspend fun setLastSessionAt(id: TrackId, at: Long) = dao.setLastSessionAt(id.source.value, id.sourceTrackId, at)

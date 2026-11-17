@@ -3,6 +3,7 @@ package app.croonvox.core.player
 
 import app.croonvox.core.library.TrackFiles
 import app.croonvox.core.library.TrackRepository
+import app.croonvox.core.model.AudioFile
 import app.croonvox.core.model.Track
 import app.croonvox.core.model.TrackId
 import app.croonvox.core.model.TrackPipelineState
@@ -30,12 +31,17 @@ class TrackPlayer(
      */
     suspend fun open(id: TrackId, onProgress: (Float) -> Unit = {}): OpenTrack {
         val track = tracks.getForOpening(id)
-        val audio = when (val pipeline = track.pipeline) {
-            is TrackPipelineState.Ready -> files.stems(id, pipeline.model).instrumental
-            else -> files.originalAudio(id)
-        }
-        val load = engine.load(audio, onProgress)
+        val load = engine.load(audioOf(track), onProgress)
         return OpenTrack(track, load, engine)
+    }
+
+    /**
+     * What Track detail plays for [track] as it is: the Instrumental once Ready with stems, the
+     * Original Audio before, and always for a Vocal-Free Track (ADR 14).
+     */
+    fun audioOf(track: Track): AudioFile = when (val pipeline = track.pipeline) {
+        is TrackPipelineState.Ready -> pipeline.model?.let { files.stems(track.id, it).instrumental } ?: files.originalAudio(track.id)
+        else -> files.originalAudio(track.id)
     }
 }
 

@@ -27,6 +27,8 @@ internal data class TrackEntity(
     @ColumnInfo(name = "pipeline_failure") val pipelineFailure: String? = null,
     /** When a Session was last opened on the Track (version 8, #20). */
     @ColumnInfo(name = "last_session_at") val lastSessionAt: Long? = null,
+    /** The Track is Vocal-Free (version 9, #25). */
+    @ColumnInfo(name = "vocal_free", defaultValue = "0") val vocalFree: Boolean = false,
 )
 
 internal fun Track.toEntity(addedAt: Long): TrackEntity {
@@ -42,6 +44,7 @@ internal fun Track.toEntity(addedAt: Long): TrackEntity {
         pipelineProgress = pipelineColumns.progress,
         pipelineFailure = pipelineColumns.failure,
         lastSessionAt = lastSessionAt,
+        vocalFree = vocalFree,
     )
 }
 
@@ -52,6 +55,7 @@ internal fun TrackEntity.toTrack() = Track(
     durationMs = durationMs,
     pipeline = PipelineColumns(pipelineState, pipelineProgress, pipelineFailure).toState(),
     lastSessionAt = lastSessionAt,
+    vocalFree = vocalFree,
 )
 
 /** The pipeline columns of a row. Stored as stable strings so enum/class renames don't corrupt data. */
@@ -64,7 +68,8 @@ internal fun TrackPipelineState.toColumns(): PipelineColumns = when (this) {
         PipelineColumns("downloading", progress = "downloading:${progress ?: ""}:$failedAttempts", failure = retryReason)
     TrackPipelineState.Downloaded -> PipelineColumns("downloaded")
     is TrackPipelineState.Separating -> PipelineColumns("$SEPARATING_PREFIX${model.value}", progress = progress?.toColumn())
-    is TrackPipelineState.Ready -> PipelineColumns("$READY_PREFIX${model.value}")
+    // A Vocal-Free Track is Ready without stems (ADR 14): plain `ready`.
+    is TrackPipelineState.Ready -> PipelineColumns(model?.let { "$READY_PREFIX${it.value}" } ?: READY)
     is TrackPipelineState.StemsDeleted -> PipelineColumns("$STEMS_DELETED_PREFIX${model.value}")
     is TrackPipelineState.Failed -> PipelineColumns("$FAILED_PREFIX${step.toColumn()}", failure = reason)
 }
@@ -82,6 +87,7 @@ private fun PipelineColumns.toState(): TrackPipelineState = when {
     state == "downloaded" -> TrackPipelineState.Downloaded
     state.startsWith(SEPARATING_PREFIX) ->
         TrackPipelineState.Separating(SeparationModelId(state.removePrefix(SEPARATING_PREFIX)), progress?.let(::progressFromColumn))
+    state == READY -> TrackPipelineState.Ready(model = null)
     state.startsWith(READY_PREFIX) -> TrackPipelineState.Ready(SeparationModelId(state.removePrefix(READY_PREFIX)))
     state.startsWith(STEMS_DELETED_PREFIX) ->
         TrackPipelineState.StemsDeleted(SeparationModelId(state.removePrefix(STEMS_DELETED_PREFIX)))
@@ -118,6 +124,7 @@ private fun stepFromColumn(value: String): PipelineStep = when (value) {
 }
 
 private const val SEPARATING_PREFIX = "separating:"
+private const val READY = "ready"
 private const val READY_PREFIX = "ready:"
 private const val FAILED_PREFIX = "failed:"
 private const val STEMS_DELETED_PREFIX = "stems_deleted:"

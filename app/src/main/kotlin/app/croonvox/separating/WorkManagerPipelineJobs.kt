@@ -51,8 +51,11 @@ class WorkManagerPipelineJobs(private val workManager: WorkManager) : PipelineJo
         workManager.enqueueUniqueWork(DOWNLOAD.of(track), ExistingWorkPolicy.APPEND_OR_REPLACE, request)
     }
 
-    override suspend fun cancelAll(track: TrackId) {
-        val names = listOf(SEPARATE, DOWNLOAD, LYRICS).map { it.of(track) }
+    override suspend fun cancelSeparation(track: TrackId) = cancelAndWait(listOf(SEPARATE.of(track)))
+
+    override suspend fun cancelAll(track: TrackId) = cancelAndWait(listOf(SEPARATE, DOWNLOAD, LYRICS).map { it.of(track) })
+
+    private suspend fun cancelAndWait(names: List<String>) {
         names.forEach(workManager::cancelUniqueWork)
         // A running worker is stopped through coroutine cancellation; wait until WorkManager reports it.
         withTimeoutOrNull(CANCEL_TIMEOUT_MS) {

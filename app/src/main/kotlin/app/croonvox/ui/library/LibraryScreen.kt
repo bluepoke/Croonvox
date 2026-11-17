@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -26,6 +28,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
@@ -56,10 +61,15 @@ fun LibraryRoute(
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) importer.import(uri)
     }
+    // The secondary import: the file has no vocals, so Separation is skipped (ADR 14).
+    val vocalFreePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) importer.import(uri, vocalFree = true)
+    }
     LibraryScreen(
         state = state,
         importing = importing > 0,
         onImport = { picker.launch(arrayOf("audio/*", "video/*")) },
+        onImportVocalFree = { vocalFreePicker.launch(arrayOf("audio/*", "video/*")) },
         onOpen = onOpen,
         onStorage = onStorage,
         onSearch = onSearch,
@@ -72,6 +82,7 @@ fun LibraryScreen(
     state: LibraryUiState,
     importing: Boolean = false,
     onImport: () -> Unit = {},
+    onImportVocalFree: () -> Unit = {},
     onOpen: (TrackId) -> Unit = {},
     onStorage: () -> Unit = {},
     /** Opens the search; null when the app has no network Sources (local flavor). */
@@ -84,6 +95,19 @@ fun LibraryScreen(
                 actions = {
                     if (onSearch != null) TextButton(onClick = onSearch) { Text("Search songs") }
                     TextButton(onClick = onStorage) { Text("Storage") }
+                    var menu by remember { mutableStateOf(false) }
+                    Box {
+                        TextButton(onClick = { menu = true }) { Text("⋮") }
+                        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                            DropdownMenuItem(
+                                text = { Text("Import file without vocals") },
+                                onClick = {
+                                    menu = false
+                                    onImportVocalFree()
+                                },
+                            )
+                        }
+                    }
                 },
             )
         },

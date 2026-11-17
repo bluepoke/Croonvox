@@ -138,6 +138,19 @@ class TrackStorageTest {
         assertEquals(4_000_000, files.sizeOf(files.originalAudio(kept)))
     }
 
+    @Test
+    fun `a Vocal-Free Track shows no stems, and stems left by a late Separation are cleared at start`() = runTest {
+        tracks.addIfAbsent(Track(trackId, "Karaoke", null, 148_000, TrackPipelineState.Ready(model = null), vocalFree = true))
+        files.store(files.originalAudio(trackId), 4_000_000)
+        files.store(files.separationCheckpoint(trackId, FAST), 10_000_000)
+
+        assertEquals(emptyMap(), storage.usage().single().stemBytes)
+        storage.removeOrphanedFiles()
+
+        assertEquals(0, files.sizeOf(files.separationCheckpoint(trackId, FAST)))
+        assertEquals(4_000_000, files.sizeOf(files.originalAudio(trackId)))
+    }
+
     private companion object {
         val FAST = SeparationModelId("fast")
         val BEST = SeparationModelId("best")

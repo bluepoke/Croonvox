@@ -11,7 +11,7 @@ import app.croonvox.core.model.TrackPipelineState
 /**
  * Moves Tracks through the Track Pipeline (ADR 10): a Track added from one of the network Sources
  * in [downloadFrom] is queued for download, and every Track that reaches Downloaded is queued for
- * Separation with [defaultModel]. Local imports aren't downloaded: a local Track left in Added is
+ * Separation with [defaultModel], or is Ready at once if it is Vocal-Free (ADR 14). Local imports aren't downloaded: a local Track left in Added is
  * an import that never finished, and importing the file again completes it.
  */
 class TrackPipeline(
@@ -36,9 +36,16 @@ class TrackPipeline(
                     // Left Downloading by an earlier process (or queued above): make sure its job exists.
                     is TrackPipelineState.Downloading -> if (queued.add(track.id)) jobs.download(track.id)
                     TrackPipelineState.Downloaded -> {
-                        tracks.updatePipeline(track.id, TrackPipelineState.Separating(defaultModel))
-                        queued += track.id
-                        jobs.separate(track.id, defaultModel)
+                        // One atomic step, so marking the Track Vocal-Free meanwhile is never missed.
+                        val next = tracks.update(track.id) { now ->
+                            if (now.pipeline != TrackPipelineState.Downloaded) return@update null
+                            // A Vocal-Free Track skips Separation (ADR 14).
+                            now.copy(pipeline = if (now.vocalFree) TrackPipelineState.Ready(model = null) else TrackPipelineState.Separating(defaultModel))
+                        }
+                        if (next?.pipeline == TrackPipelineState.Separating(defaultModel)) {
+                            queued += track.id
+                            jobs.separate(track.id, defaultModel)
+                        }
                     }
                     // Left Separating by an earlier process (or queued above): make sure its job exists.
                     is TrackPipelineState.Separating -> if (queued.add(track.id)) jobs.separate(track.id, state.model)

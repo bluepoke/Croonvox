@@ -17,6 +17,13 @@ Some Original Audio has no lead vocal to remove, for example the audio of a kara
 - A Backing Export of a Vocal-Free Track is tagged **"Title (Instrumental, ±n)"**: the tag says what the file is, because "Original" means *with the artist's vocals* on other Tracks.
 - **No automatic detection** in v1: the user always decides.
 
+## Note: built in #25 (2026-11-17)
+- A Vocal-Free Track is `Ready` **without a Separation Model**, so nothing that plays a Track needs the flag to know it has no stems.
+- **Shares** (a link or a file shared from another app) add at once, as before. Track detail then offers "Mark Vocal-Free" in a snackbar while Separation hasn't finished. Picking a local file has a secondary "Import file without vocals" item in the Library's menu, and a search result has a secondary "Add without vocal removal" button.
+- Marking, and every state a Separation job writes, are **atomic changes of the Track**. A job that hasn't stopped yet when the Track is marked can't write `Separating` or `Ready` over it.
+- Deleted stems (ADR 17) don't come back for a Vocal-Free Track: marking a `Stems Deleted` Track makes it `Ready` at once.
+- Mixes (#14), the Backing Audio choice (#17) and the Guide Vocal (#18) don't exist yet. Their parts of this decision land with those tickets.
+
 ## Considered Options
 - **The Original Audio counts as the Instrumental** (a copy or a reference, with no Vocal Stem). It keeps "Instrumental by default", but the Backing Audio choice would offer the same audio twice, and Mixes would reference an Instrumental "by Separation Model" that no model produced. Rejected.
 - **Detecting vocal-free audio.** A title hint ("karaoke", "instrumental") is unreliable: karaoke versions with guide vocals and lyric videos contain vocals, and many karaoke uploads don't say so. Audio analysis would need Separation, which costs exactly what this decision saves. Deferred.

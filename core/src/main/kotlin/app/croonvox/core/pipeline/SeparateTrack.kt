@@ -41,7 +41,9 @@ class SeparateTrack(
     /**
      * Separates the Track with [model] if it is waiting for that: Downloaded, or Separating with
      * [model]. A job that runs after the Track moved on (e.g. one queued behind a job that
-     * already finished it) changes nothing.
+     * already finished it) changes nothing, and neither does one whose Track moves on while it
+     * runs (e.g. marked Vocal-Free before the job stopped, ADR 14): every state it writes is
+     * written only while the Track still waits for this Separation.
      */
     suspend operator fun invoke(id: TrackId, model: SeparationModelId): Outcome = coroutineScope {
         when (val state = tracks.get(id)?.pipeline) {
@@ -51,13 +53,13 @@ class SeparateTrack(
             is TrackPipelineState.Separating -> if (state.model != model) return@coroutineScope Outcome.Skipped
             else -> return@coroutineScope Outcome.Skipped
         }
-        tracks.updatePipeline(id, TrackPipelineState.Separating(model))
+        if (!writeWhileWaiting(id, model, TrackPipelineState.Separating(model))) return@coroutineScope Outcome.Skipped
         // The Separator reports from any thread, sometimes many times a second (e.g. per block of a
         // download). Only the latest progress in whole percent is stored: the flow drops repeats,
         // so each stage writes the Track (and updates the notification) at most about 100 times.
         val progress = MutableStateFlow<SeparationProgress?>(null)
         val storing = launch {
-            progress.filterNotNull().collect { tracks.updatePipeline(id, TrackPipelineState.Separating(model, it)) }
+            progress.filterNotNull().collect { writeWhileWaiting(id, model, TrackPipelineState.Separating(model, it)) }
         }
         val failure = try {
             separator.separate(
@@ -77,25 +79,35 @@ class SeparateTrack(
         } finally {
             storing.cancelAndJoin()
         }
-        when {
-            failure == null -> {
-                tracks.updatePipeline(id, TrackPipelineState.Ready(model))
-                Outcome.Ready
-            }
-            failure is SeparationFailed && failure.retryable -> {
-                // Keep showing how far it got; the next run continues from the checkpoint.
-                progress.value?.let { tracks.updatePipeline(id, TrackPipelineState.Separating(model, it)) }
-                Outcome.RetryLater
-            }
+        val (state, outcome) = when {
+            failure == null -> TrackPipelineState.Ready(model) to Outcome.Ready
+            // Keep showing how far it got; the next run continues from the checkpoint.
+            failure is SeparationFailed && failure.retryable ->
+                TrackPipelineState.Separating(model, progress.value) to Outcome.RetryLater
             else -> {
                 val reason = when (failure) {
                     is OutOfMemoryError -> "out of memory"
                     else -> failure.message ?: failure::class.simpleName ?: "unknown error"
                 }
-                tracks.updatePipeline(id, TrackPipelineState.Failed(PipelineStep.Separating, reason))
-                Outcome.Failed
+                TrackPipelineState.Failed(PipelineStep.Separating, reason) to Outcome.Failed
             }
         }
+        if (writeWhileWaiting(id, model, state)) outcome else Outcome.Skipped
+    }
+
+    /**
+     * Stores [state] if the Track still waits for Separation with [model] (Downloaded, or Separating
+     * with it, and not Vocal-Free); returns whether it did.
+     */
+    private suspend fun writeWhileWaiting(id: TrackId, model: SeparationModelId, state: TrackPipelineState): Boolean {
+        var written = false
+        tracks.update(id) { track ->
+            val pipeline = track.pipeline
+            val waiting = pipeline == TrackPipelineState.Downloaded || (pipeline is TrackPipelineState.Separating && pipeline.model == model)
+            written = waiting && !track.vocalFree
+            if (written) track.copy(pipeline = state) else null
+        }
+        return written
     }
 }
 

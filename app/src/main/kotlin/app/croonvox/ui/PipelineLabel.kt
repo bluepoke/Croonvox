@@ -35,5 +35,5 @@ fun TrackPipelineState.label(): String = when (this) {
 
 private fun percent(fraction: Float) = "${(fraction * 100).toInt()} %"
 
-/** Secondary line for a Track: artist (if known) and pipeline state. */
-fun Track.subtitle(): String = listOfNotNull(artist, pipeline.label()).joinToString(" · ")
+/** Secondary line for a Track: artist (if known), pipeline state, and whether it is Vocal-Free. */
+fun Track.subtitle(): String = listOfNotNull(artist, pipeline.label(), "Vocal-Free".takeIf { vocalFree }).joinToString(" · ")

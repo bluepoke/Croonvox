@@ -434,7 +434,8 @@ class Session private constructor(
     }
 
     private fun backingFor(track: Track): BackingAudio = when (val pipeline = track.pipeline) {
-        is TrackPipelineState.Ready -> BackingAudio.Instrumental(pipeline.model)
+        // A Vocal-Free Track (no stems) always sings over its Original Audio (ADR 14).
+        is TrackPipelineState.Ready -> pipeline.model?.let(BackingAudio::Instrumental) ?: BackingAudio.OriginalAudio
         else -> BackingAudio.OriginalAudio
     }
 

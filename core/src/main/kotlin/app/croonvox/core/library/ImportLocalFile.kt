@@ -12,7 +12,8 @@ import app.croonvox.core.port.LocalFile
  * into app storage as Original Audio, and the Track moves Added → Downloaded (ADR 8, ADR 10).
  */
 class ImportLocalFile(private val tracks: TrackRepository, private val files: TrackFiles) {
-    suspend operator fun invoke(file: LocalFile): Track {
+    /** Imports [file], marked [vocalFree] if asked; content imported before keeps its Track unchanged (ADR 14). */
+    suspend operator fun invoke(file: LocalFile, vocalFree: Boolean = false): Track {
         val staged = file.open().use { files.stage(it) }
         val id = TrackId(SourceId.Local, staged.sha256)
         val track = tracks.addIfAbsent(
@@ -22,6 +23,7 @@ class ImportLocalFile(private val tracks: TrackRepository, private val files: Tr
                 artist = null,
                 durationMs = null,
                 pipeline = TrackPipelineState.Added,
+                vocalFree = vocalFree,
             ),
         )
         // Same content imported before: keep that Track and its stored file untouched. Only a

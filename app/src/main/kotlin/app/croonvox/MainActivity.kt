@@ -42,7 +42,7 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(Unit) {
                     container.linkImporter.results.collect { result ->
                         when (result) {
-                            is LinkImporter.Result.Added -> nav.openTrack(result.id)
+                            is LinkImporter.Result.Added -> nav.openTrack(result.id, shared = true)
                             LinkImporter.Result.Unsupported ->
                                 Toast.makeText(this@MainActivity, "Croonvox can't add songs from this link", Toast.LENGTH_LONG).show()
                             is LinkImporter.Result.Failed ->
@@ -54,7 +54,7 @@ class MainActivity : ComponentActivity() {
                     container.importer.results.collect { result ->
                         when (result) {
                             // Opens the new Track, or the existing one for content imported before.
-                            is Importer.Result.Imported -> nav.openTrack(result.id)
+                            is Importer.Result.Imported -> nav.openTrack(result.id, shared = result.shared)
                             is Importer.Result.Failed ->
                                 Toast.makeText(this@MainActivity, "Import failed: ${result.reason}", Toast.LENGTH_LONG).show()
                         }
@@ -77,14 +77,22 @@ class MainActivity : ComponentActivity() {
                     }
                     composable(
                         TRACK,
-                        arguments = listOf(navArgument("source") { type = NavType.StringType }, navArgument("id") { type = NavType.StringType }),
+                        arguments = listOf(
+                            navArgument("source") { type = NavType.StringType },
+                            navArgument("id") { type = NavType.StringType },
+                            navArgument("shared") {
+                                type = NavType.BoolType
+                                defaultValue = false
+                            },
+                        ),
                     ) { entry ->
                         val args = checkNotNull(entry.arguments)
                         val id = TrackId(SourceId(checkNotNull(args.getString("source"))), checkNotNull(args.getString("id")))
                         // ViewModels here are scoped to this back-stack entry and cleared on Back.
                         TrackDetailRoute(
                             id, container.trackRepository, container.trackPlayer, container.trackPipeline,
-                            container.lyricsRepository, container.matchLyrics,
+                            container.lyricsRepository, container.matchLyrics, container.vocalFreeToggle,
+                            offerVocalFree = args.getBoolean("shared"),
                             onSing = { nav.openSession(id) },
                             onChooseLyrics = { nav.navigate(route(LYRICS, id)) },
                         )
@@ -121,14 +129,17 @@ class MainActivity : ComponentActivity() {
         // Reopening from recents replays the original intent; its URI grant may be gone.
         if (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0) return
         val uri = IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)
-        if (uri != null) return container.importer.import(uri)
+        if (uri != null) return container.importer.import(uri, shared = true)
         // A link (network flavor only receives text): a video page shared from a browser or app.
         intent.getStringExtra(Intent.EXTRA_TEXT)?.let(container.linkImporter::add)
     }
 
-    /** Shows a Track's detail, replacing any detail screen already open (one Track at a time). */
-    private fun NavHostController.openTrack(id: TrackId) {
-        navigate("track/${Uri.encode(id.source.value)}/${Uri.encode(id.sourceTrackId)}") {
+    /**
+     * Shows a Track's detail, replacing any detail screen already open (one Track at a time).
+     * [shared]: it was just added from a share, so the screen offers to mark it Vocal-Free (ADR 14).
+     */
+    private fun NavHostController.openTrack(id: TrackId, shared: Boolean = false) {
+        navigate("track/${Uri.encode(id.source.value)}/${Uri.encode(id.sourceTrackId)}?shared=$shared") {
             popUpTo(LIBRARY)
         }
     }
@@ -141,7 +152,7 @@ class MainActivity : ComponentActivity() {
         const val LIBRARY = "library"
         const val SEARCH = "search"
         const val STORAGE = "storage"
-        const val TRACK = "track/{source}/{id}"
+        const val TRACK = "track/{source}/{id}?shared={shared}"
         const val SESSION = "session/{source}/{id}"
         const val LYRICS = "lyrics/{source}/{id}"
 

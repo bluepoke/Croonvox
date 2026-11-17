@@ -21,6 +21,13 @@ interface TrackRepository {
      */
     suspend fun addIfAbsent(track: Track): Track
 
+    /**
+     * Atomically replaces the Track with what [change] makes of it as stored now; [change] returns
+     * null to leave it as it is. Returns the Track as stored afterwards, or null if there is none.
+     * [change] may run more than once, so it must not have side effects.
+     */
+    suspend fun update(id: TrackId, change: (Track) -> Track?): Track?
+
     /** Sets the Track Pipeline state of an existing Track and returns the updated Track. */
     suspend fun updatePipeline(id: TrackId, state: TrackPipelineState): Track
 

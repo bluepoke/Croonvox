@@ -24,6 +24,9 @@ interface PipelineJobs {
      */
     fun fetchLyrics(track: TrackId)
 
+    /** Cancels a Separation queued or running for [track] and waits until it has stopped. */
+    suspend fun cancelSeparation(track: TrackId)
+
     /** Cancels every job queued or running for [track] (it is being deleted) and waits until they have stopped. */
     suspend fun cancelAll(track: TrackId)
 }

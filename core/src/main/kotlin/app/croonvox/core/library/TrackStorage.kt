@@ -61,19 +61,24 @@ class TrackStorage(
     }
 
     /**
-     * Removes files of Tracks that are no longer in the Library, e.g. written by a job that hadn't
-     * stopped yet when its Track was deleted. Safe at any time: a Track's row always exists before
-     * its files (imports and downloads add the Track first).
+     * Removes files written by a job that hadn't stopped yet: those of Tracks no longer in the
+     * Library (deleted), and stems of Vocal-Free Tracks (marked during Separation). Safe at any
+     * time: a Track's row always exists before its files (imports and downloads add the Track first).
      */
     suspend fun removeOrphanedFiles() {
-        files.deleteAllExcept(tracks.observeAll().first().mapTo(HashSet()) { it.id })
+        val all = tracks.observeAll().first()
+        files.deleteAllExcept(all.mapTo(HashSet()) { it.id })
+        for (track in all.filter { it.vocalFree }) models.forEach { files.deleteStems(track.id, it) }
     }
 
     private suspend fun usage(track: Track): TrackUsage {
-        val stems = models.associateWith { model ->
-            val stems = files.stems(track.id, model)
-            files.sizeOf(stems.instrumental) + files.sizeOf(stems.vocalStem) + files.sizeOf(files.separationCheckpoint(track.id, model))
-        }.filterValues { it > 0 }
+        // A Vocal-Free Track has no stems to show or regenerate (ADR 14); leftovers go at start.
+        val stems = if (track.vocalFree) {
+            emptyMap()
+        } else {
+            models.associateWith { files.sizeOfStems(track.id, it) + files.sizeOf(files.separationCheckpoint(track.id, it)) }
+                .filterValues { it > 0 }
+        }
         return TrackUsage(
             track = track,
             originalAudioBytes = files.sizeOf(files.originalAudio(track.id)),

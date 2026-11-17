@@ -9,7 +9,7 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [TrackEntity::class, TakeEntity::class, SettingEntity::class, LyricsEntity::class, LyricsOffsetEntity::class],
-    version = 8,
+    version = 9,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2), // 2: takes and settings tables (#8)
@@ -19,6 +19,7 @@ import androidx.room.RoomDatabase
         AutoMigration(from = 5, to = 6), // 6: lyrics offsets (#12)
         AutoMigration(from = 6, to = 7), // 7: each Take's Transpose (#10)
         AutoMigration(from = 7, to = 8), // 8: when each Track was last sung (#20)
+        AutoMigration(from = 8, to = 9), // 9: Vocal-Free Tracks (#25)
     ],
 )
 abstract class CroonvoxDatabase : RoomDatabase() {

@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.updateAndGet
 
 class InMemoryTrackRepository : TrackRepository {
     private val tracks = MutableStateFlow<List<Track>>(emptyList())
@@ -40,6 +41,13 @@ class InMemoryTrackRepository : TrackRepository {
             current.map { if (it.id == id) it.copy(pipeline = state).also { t -> updated = t } else it }
         }
         return checkNotNull(updated) { "no Track $id" }
+    }
+
+    override suspend fun update(id: TrackId, change: (Track) -> Track?): Track? {
+        val updated = tracks.updateAndGet { current ->
+            current.map { if (it.id == id) change(it) ?: it else it }
+        }
+        return updated.firstOrNull { it.id == id }
     }
 
     override suspend fun delete(id: TrackId) {

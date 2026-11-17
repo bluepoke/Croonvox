@@ -19,16 +19,18 @@ class Library(private val tracks: TrackRepository, private val takes: TakeReposi
         }
 
     /**
-     * Adds a Source search result as a new Track in the [TrackPipelineState.Added] state.
-     * If the same Source item was added before, returns that Track unchanged (ADR 10).
+     * Adds a Source search result as a new Track in the [TrackPipelineState.Added] state, marked
+     * [vocalFree] if asked. If the same Source item was added before, returns that Track
+     * unchanged (ADR 10, ADR 14).
      */
-    suspend fun add(candidate: SourceCandidate): Track {
+    suspend fun add(candidate: SourceCandidate, vocalFree: Boolean = false): Track {
         val track = Track(
             id = candidate.id,
             title = candidate.title,
             artist = candidate.artist,
             durationMs = candidate.durationMs,
             pipeline = TrackPipelineState.Added,
+            vocalFree = vocalFree,
         )
         return tracks.addIfAbsent(track)
     }

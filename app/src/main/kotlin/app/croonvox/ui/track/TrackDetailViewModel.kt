@@ -9,8 +9,8 @@ import app.croonvox.core.lyrics.MatchLyrics
 import app.croonvox.core.lyrics.TrackLyrics
 import app.croonvox.core.model.Track
 import app.croonvox.core.model.TrackId
-import app.croonvox.core.model.TrackPipelineState
 import app.croonvox.core.pipeline.TrackPipeline
+import app.croonvox.core.pipeline.VocalFreeToggle
 import app.croonvox.core.player.OpenTrack
 import app.croonvox.core.player.TrackPlayer
 import app.croonvox.core.port.Playback
@@ -30,6 +30,7 @@ class TrackDetailViewModel(
     private val pipeline: TrackPipeline,
     lyrics: LyricsRepository,
     private val match: MatchLyrics,
+    private val vocalFree: VocalFreeToggle,
 ) : ViewModel() {
     val lyrics: StateFlow<TrackLyrics?> = lyrics.observe(id).stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
@@ -65,14 +66,14 @@ class TrackDetailViewModel(
         }
         // A Session opened from here releases the Audio Engine only after this screen resumes.
         viewModelScope.launch { playback.collect { if (resumed) reopenIfReleased() } }
-        // Separation finished while this screen is open: switch to the Instrumental (ADR 10).
-        viewModelScope.launch { track.collect { if (resumed) switchIfReady() } }
+        // Separation finished, or Vocal-Free changed, while this screen is open: switch audio (ADR 10, ADR 14).
+        viewModelScope.launch { track.collect { if (resumed) followTrackAudio() } }
     }
 
     fun onResume() {
         resumed = true
         reopenIfReleased()
-        switchIfReady()
+        followTrackAudio()
     }
 
     fun onPause() {
@@ -104,17 +105,38 @@ class TrackDetailViewModel(
     }
 
     /**
-     * Loads the Instrumental in place of the Original Audio once the Track is Ready, at the same
-     * position and still playing if it was: the stems are sample-aligned with the Original Audio.
+     * Loads the audio the Track now calls for (the Instrumental once Ready, the Original Audio when
+     * marked Vocal-Free), at the same position and still playing if it was: the stems are
+     * sample-aligned with the Original Audio.
      */
-    private fun switchIfReady() {
+    private fun followTrackAudio() {
         val current = opened ?: return
         if (opening?.isActive == true) return
-        if (current.track.pipeline is TrackPipelineState.Ready || track.value?.pipeline !is TrackPipelineState.Ready) return
+        val now = track.value ?: return
+        if (player.audioOf(now) == player.audioOf(current.track)) return
         val state = playback.value
         _ready.value = false
         _loadProgress.value = 0f
         open(atMs = state.positionMs, play = state.playing)
+    }
+
+    private val _confirmVocalFree = MutableStateFlow<Long?>(null)
+
+    /** Bytes of stems that marking the Track Vocal-Free would delete, while waiting for the user to confirm. */
+    val confirmVocalFree: StateFlow<Long?> = _confirmVocalFree
+
+    /** The Vocal-Free toggle (ADR 14): turning it on asks first if stems would be deleted. */
+    fun setVocalFree(on: Boolean) {
+        viewModelScope.launch {
+            if (!on) return@launch vocalFree.unmark(id)
+            val bytes = vocalFree.stemBytes(id)
+            if (bytes > 0) _confirmVocalFree.value = bytes else vocalFree.mark(id)
+        }
+    }
+
+    fun confirmVocalFree(confirmed: Boolean) {
+        _confirmVocalFree.value = null
+        if (confirmed) viewModelScope.launch { vocalFree.mark(id) }
     }
 
     /** Runs a failed Separation again. */

@@ -17,6 +17,7 @@ import app.croonvox.core.lyrics.MatchLyrics
 import app.croonvox.core.pipeline.DownloadTrack
 import app.croonvox.core.pipeline.SeparateTrack
 import app.croonvox.core.pipeline.TrackPipeline
+import app.croonvox.core.pipeline.VocalFreeToggle
 import app.croonvox.core.player.TrackPlayer
 import app.croonvox.core.port.AudioEngine
 import app.croonvox.core.port.LyricsProvider
@@ -80,6 +81,9 @@ class AppContainer(private val context: Context) {
     }
     val separateTrack: SeparateTrack by lazy { SeparateTrack(trackRepository, trackFiles, separator) }
     private val pipelineJobs by lazy { WorkManagerPipelineJobs(workManager) }
+    val vocalFreeToggle: VocalFreeToggle by lazy {
+        VocalFreeToggle(trackRepository, trackFiles, pipelineJobs, SeparationCatalogue.default.id, SeparationCatalogue.models.map { it.id })
+    }
     val trackPipeline: TrackPipeline by lazy {
         TrackPipeline(trackRepository, pipelineJobs, SeparationCatalogue.default.id, downloadFrom = sources.map { it.id }.toSet())
     }

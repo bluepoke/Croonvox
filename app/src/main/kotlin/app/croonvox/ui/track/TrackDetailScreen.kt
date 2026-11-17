@@ -7,7 +7,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import android.text.format.Formatter
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.Switch
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -18,11 +26,15 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -36,6 +48,7 @@ import app.croonvox.core.lyrics.TrackLyrics
 import app.croonvox.core.model.TrackId
 import app.croonvox.core.model.TrackPipelineState
 import app.croonvox.core.pipeline.TrackPipeline
+import app.croonvox.core.pipeline.VocalFreeToggle
 import app.croonvox.core.player.TrackPlayer
 import app.croonvox.core.port.Playback
 import app.croonvox.ui.formatTime
@@ -51,12 +64,17 @@ fun TrackDetailRoute(
     pipeline: TrackPipeline,
     lyrics: LyricsRepository,
     match: MatchLyrics,
+    vocalFreeToggle: VocalFreeToggle,
+    /** The Track was just added from a share, without the chance to mark it Vocal-Free first. */
+    offerVocalFree: Boolean,
     onSing: () -> Unit,
     onChooseLyrics: () -> Unit,
 ) {
     val viewModel: TrackDetailViewModel = viewModel(
-        factory = viewModelFactory { initializer { TrackDetailViewModel(id, tracks, player, pipeline, lyrics, match) } },
+        factory = viewModelFactory { initializer { TrackDetailViewModel(id, tracks, player, pipeline, lyrics, match, vocalFreeToggle) } },
     )
+    val confirmVocalFree by viewModel.confirmVocalFree.collectAsStateWithLifecycle()
+    val snackbar = remember { SnackbarHostState() }
     val trackLyrics by viewModel.lyrics.collectAsStateWithLifecycle()
     val track by viewModel.track.collectAsStateWithLifecycle()
     val playback by viewModel.playback.collectAsStateWithLifecycle()
@@ -68,10 +86,37 @@ fun TrackDetailRoute(
         viewModel.onResume()
         onPauseOrDispose { viewModel.onPause() }
     }
+    // A share adds at once; offer Vocal-Free afterwards, while it still saves Separation (ADR 14).
+    var offered by rememberSaveable { mutableStateOf(false) }
+    val offerable = offerVocalFree && !offered && track?.let { !it.vocalFree && it.pipeline !is TrackPipelineState.Ready } == true
+    LaunchedEffect(offerable) {
+        if (!offerable) return@LaunchedEffect
+        offered = true
+        val result = snackbar.showSnackbar("No vocals in this song?", actionLabel = "Mark Vocal-Free", duration = SnackbarDuration.Long)
+        if (result == SnackbarResult.ActionPerformed) viewModel.setVocalFree(true)
+    }
+    confirmVocalFree?.let { bytes ->
+        val context = LocalContext.current
+        AlertDialog(
+            onDismissRequest = { viewModel.confirmVocalFree(false) },
+            title = { Text("Mark as Vocal-Free?") },
+            text = {
+                Text(
+                    "The instrumental and the vocal stem are deleted, freeing ${Formatter.formatShortFileSize(context, bytes)}. " +
+                        "You sing over the original audio from now on. Takes stay in sync.",
+                )
+            },
+            confirmButton = { TextButton(onClick = { viewModel.confirmVocalFree(true) }) { Text("Delete stems") } },
+            dismissButton = { TextButton(onClick = { viewModel.confirmVocalFree(false) }) { Text("Cancel") } },
+        )
+    }
     TrackDetailScreen(
         title = track?.title ?: "",
         subtitle = track?.artist.orEmpty(),
         pipeline = track?.pipeline,
+        vocalFree = track?.vocalFree,
+        onVocalFree = viewModel::setVocalFree,
+        snackbar = snackbar,
         playback = playback,
         ready = ready,
         loadProgress = loadProgress,
@@ -96,6 +141,10 @@ fun TrackDetailScreen(
     title: String,
     subtitle: String,
     pipeline: TrackPipelineState?,
+    /** Null until the Track is loaded. */
+    vocalFree: Boolean?,
+    onVocalFree: (Boolean) -> Unit,
+    snackbar: SnackbarHostState,
     playback: Playback,
     ready: Boolean,
     loadProgress: Float,
@@ -111,6 +160,7 @@ fun TrackDetailScreen(
 ) {
     Scaffold(
         topBar = { TopAppBar(title = { Text(title, maxLines = 1) }) },
+        snackbarHost = { SnackbarHost(snackbar) },
         floatingActionButton = {
             if (canSing) ExtendedFloatingActionButton(onClick = onSing) { Text("Sing") }
         },
@@ -123,6 +173,7 @@ fun TrackDetailScreen(
                 Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             if (pipeline != null) PipelineStatus(pipeline, onRetry)
+            if (vocalFree != null) VocalFreeToggle(vocalFree, onVocalFree)
             LyricsStatus(lyrics, onConfirmLyrics, onChooseLyrics)
             when {
                 error != null -> Text("Can't play this Track: $error", color = MaterialTheme.colorScheme.error)
@@ -198,9 +249,29 @@ private fun PipelineStatus(pipeline: TrackPipelineState, onRetry: () -> Unit) {
                 LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
             }
         }
-        is TrackPipelineState.Ready -> Text("Playing the instrumental", style = MaterialTheme.typography.bodySmall, color = muted)
+        is TrackPipelineState.Ready -> Text(
+            if (pipeline.model == null) "Playing the original audio" else "Playing the instrumental",
+            style = MaterialTheme.typography.bodySmall,
+            color = muted,
+        )
         // Opening the Track brings deleted stems back, so this shows only for a moment (ADR 17).
         TrackPipelineState.Added, TrackPipelineState.Downloaded, is TrackPipelineState.StemsDeleted -> Text(pipeline.label(), style = MaterialTheme.typography.bodySmall, color = muted)
+    }
+}
+
+/** The Vocal-Free toggle (GLOSSARY: Vocal-Free, ADR 14). */
+@Composable
+private fun VocalFreeToggle(vocalFree: Boolean, onChange: (Boolean) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text("No vocals (Vocal-Free)", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                "For audio without a lead vocal, e.g. a karaoke version: vocal removal is skipped and you sing over the original audio.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Switch(checked = vocalFree, onCheckedChange = onChange)
     }
 }
 

@@ -6,9 +6,11 @@ import app.croonvox.core.model.PipelineStep
 import app.croonvox.core.model.SeparationModelId
 import app.croonvox.core.model.TrackPipelineState
 import app.croonvox.core.pipeline.SeparateTrack
+import app.croonvox.core.pipeline.VocalFreeToggle
 import app.croonvox.core.port.SeparationFailed
 import app.croonvox.core.port.SeparationProgress
 import app.croonvox.core.testing.FakeLocalFile
+import app.croonvox.core.testing.FakePipelineJobs
 import app.croonvox.core.testing.FakeSeparator
 import app.croonvox.core.testing.InMemoryTrackFiles
 import app.croonvox.core.testing.InMemoryTrackRepository
@@ -143,5 +145,19 @@ class SeparateTrackTest {
         separate(track.id, fast)
 
         assertEquals(expected, shown)
+    }
+
+    @Test
+    fun `a Separation still running when its Track is marked Vocal-Free writes nothing over it`() = runTest {
+        val track = import(FakeLocalFile(displayName = "karaoke.mp3", content = "audio-1"))
+        val vocalFree = VocalFreeToggle(tracks, files, FakePipelineJobs(), defaultModel = fast, models = listOf(fast))
+        separator.progress = listOf(0.2f, 0.5f, 0.9f).map { SeparationProgress(SeparationProgress.Stage.Separating, it) }
+        // The user marks the Track while the job is at 20 %; the job doesn't stop at once.
+        separator.afterEachProgress = { if (it.fraction == 0.2f) vocalFree.mark(track.id) }
+
+        val outcome = separate(track.id, fast)
+
+        assertEquals(SeparateTrack.Outcome.Skipped, outcome)
+        assertEquals(TrackPipelineState.Ready(model = null), tracks.get(track.id)?.pipeline)
     }
 }

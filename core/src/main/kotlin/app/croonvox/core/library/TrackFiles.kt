@@ -72,5 +72,11 @@ interface TrackFiles {
     suspend fun deleteAllExcept(keep: Set<TrackId>)
 }
 
+/** Bytes the Instrumental and Vocal Stem of [model] take up; 0 if there are none. */
+suspend fun TrackFiles.sizeOfStems(track: TrackId, model: SeparationModelId): Long {
+    val stems = stems(track, model)
+    return sizeOf(stems.instrumental) + sizeOf(stems.vocalStem)
+}
+
 /** A copied file awaiting commit, with the lowercase hex SHA-256 of its content. */
 data class StagedFile(val file: AudioFile, val sha256: String)

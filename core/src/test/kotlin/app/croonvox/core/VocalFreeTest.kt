@@ -1,0 +1,145 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+package app.croonvox.core
+
+import app.croonvox.core.model.PipelineStep
+import app.croonvox.core.model.SeparationModelId
+import app.croonvox.core.model.SourceId
+import app.croonvox.core.model.Track
+import app.croonvox.core.model.TrackId
+import app.croonvox.core.model.TrackPipelineState
+import app.croonvox.core.pipeline.TrackPipeline
+import app.croonvox.core.pipeline.SeparateTrack
+import app.croonvox.core.pipeline.VocalFreeToggle
+import app.croonvox.core.player.TrackPlayer
+import app.croonvox.core.port.SeparationProgress
+import app.croonvox.core.testing.FakeAudioEngine
+import app.croonvox.core.testing.FakePipelineJobs
+import app.croonvox.core.testing.FakeSeparator
+import app.croonvox.core.testing.InMemoryTrackFiles
+import app.croonvox.core.testing.InMemoryTrackRepository
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.runTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class VocalFreeTest {
+    private val tracks = InMemoryTrackRepository()
+    private val files = InMemoryTrackFiles()
+    private val jobs = FakePipelineJobs()
+    private val vocalFree = VocalFreeToggle(tracks, files, jobs, defaultModel = FAST, models = listOf(FAST, BEST))
+    private val pipeline = TrackPipeline(tracks, jobs, defaultModel = FAST)
+    private val id = TrackId(SourceId.Local, "abc")
+
+    private suspend fun addTrack(pipeline: TrackPipelineState, vocalFree: Boolean = false) =
+        tracks.addIfAbsent(Track(id, "Fly Me to the Moon (Karaoke)", null, 148_000, pipeline, vocalFree = vocalFree))
+
+    private fun TestScope.startPipeline() {
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { pipeline.run() }
+    }
+
+    @Test
+    fun `marking a Separating Track cancels the Separation, drops its partial stems and makes it Ready`() = runTest {
+        addTrack(TrackPipelineState.Separating(FAST, SeparationProgress(SeparationProgress.Stage.Separating, 0.4f)))
+        files.store(files.separationCheckpoint(id, FAST), 20_000_000)
+
+        vocalFree.mark(id)
+
+        assertEquals(listOf(id), jobs.cancelledSeparations)
+        assertEquals(0, files.sizeOf(files.separationCheckpoint(id, FAST)))
+        assertEquals(TrackPipelineState.Ready(model = null), tracks.get(id)?.pipeline)
+        assertEquals(true, tracks.get(id)?.vocalFree)
+    }
+
+    @Test
+    fun `marking a Track whose Separation failed makes it Ready and drops what the Separation left`() = runTest {
+        addTrack(TrackPipelineState.Failed(PipelineStep.Separating, "out of memory"))
+        files.store(files.separationCheckpoint(id, FAST), 20_000_000)
+
+        vocalFree.mark(id)
+
+        assertEquals(TrackPipelineState.Ready(model = null), tracks.get(id)?.pipeline)
+        assertEquals(emptyList(), jobs.cancelledSeparations)
+        assertEquals(0, files.sizeOf(files.separationCheckpoint(id, FAST)))
+    }
+
+    @Test
+    fun `marking a Track with stems names the space freed, then deletes them`() = runTest {
+        addTrack(TrackPipelineState.Ready(FAST))
+        files.store(files.stems(id, FAST).instrumental, 30_000_000)
+        files.store(files.stems(id, FAST).vocalStem, 25_000_000)
+
+        assertEquals(55_000_000, vocalFree.stemBytes(id))
+        vocalFree.mark(id)
+
+        assertEquals(TrackPipelineState.Ready(model = null), tracks.get(id)?.pipeline)
+        assertEquals(0, files.sizeOf(files.stems(id, FAST).instrumental))
+        assertEquals(0, vocalFree.stemBytes(id))
+    }
+
+    @Test
+    fun `marking a Track whose stems were deleted makes it Ready, and opening it then needs no stems`() = runTest {
+        addTrack(TrackPipelineState.StemsDeleted(FAST))
+        val engine = FakeAudioEngine()
+
+        vocalFree.mark(id)
+        TrackPlayer(tracks, files, engine).open(id)
+
+        assertEquals(TrackPipelineState.Ready(model = null), tracks.get(id)?.pipeline)
+        assertEquals(files.originalAudio(id), engine.playback.value.loaded)
+        assertEquals(emptyList(), jobs.separations)
+    }
+
+    @Test
+    fun `marking a Track before its download finishes skips its Separation`() = runTest {
+        addTrack(TrackPipelineState.Added)
+        vocalFree.mark(id)
+        startPipeline()
+
+        tracks.updatePipeline(id, TrackPipelineState.Downloaded)
+
+        assertEquals(TrackPipelineState.Ready(model = null), tracks.get(id)?.pipeline)
+        assertEquals(emptyList(), jobs.separations)
+    }
+
+    @Test
+    fun `unmarking a Ready Track separates it with the default model, then it plays the Instrumental`() = runTest {
+        addTrack(TrackPipelineState.Ready(model = null), vocalFree = true)
+        val player = TrackPlayer(tracks, files, FakeAudioEngine())
+
+        vocalFree.unmark(id)
+
+        assertEquals(false, tracks.get(id)?.vocalFree)
+        assertEquals(TrackPipelineState.Separating(FAST), tracks.get(id)?.pipeline)
+        assertEquals(listOf(FakePipelineJobs.Separation(id, FAST)), jobs.separations)
+        assertEquals(files.originalAudio(id), player.audioOf(tracks.get(id)!!))
+
+        SeparateTrack(tracks, files, FakeSeparator())(id, FAST) // the queued job runs
+
+        assertEquals(TrackPipelineState.Ready(FAST), tracks.get(id)?.pipeline)
+        assertEquals(files.stems(id, FAST).instrumental, player.audioOf(tracks.get(id)!!))
+    }
+
+    @Test
+    fun `stems a cancelled Separation hadn't stopped writing are not deleted once the Track was unmarked again`() = runTest {
+        addTrack(TrackPipelineState.Separating(FAST))
+        // The user turns the toggle off again while marking still waits for the old job to stop.
+        jobs.onCancelSeparation = {
+            vocalFree.unmark(id)
+            files.store(files.separationCheckpoint(id, FAST), 5_000_000) // the new Separation's work
+        }
+
+        vocalFree.mark(id)
+
+        assertEquals(TrackPipelineState.Separating(FAST), tracks.get(id)?.pipeline)
+        assertEquals(5_000_000, files.sizeOf(files.separationCheckpoint(id, FAST)))
+    }
+
+    private companion object {
+        val FAST = SeparationModelId("fast")
+        val BEST = SeparationModelId("best")
+    }
+}
