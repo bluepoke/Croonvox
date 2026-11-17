@@ -16,7 +16,9 @@
 
     <application
         android:name=".CroonvoxApp"
+        android:icon="@mipmap/ic_launcher"
         android:label="${appLabel}"
+        android:roundIcon="@mipmap/ic_launcher"
         android:supportsRtl="true"
         android:theme="@style/Theme.Croonvox">
         <activity

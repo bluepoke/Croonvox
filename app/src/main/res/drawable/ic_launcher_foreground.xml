@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!--
+  Launcher icon foreground (#32): a microphone and a music note, "singing over a song".
+  Microphone: "Microphone Radio" from SVG Repo, https://www.svgrepo.com/svg/260100/microphone-radio (CC0), recolored.
+  Kept inside the 66 dp safe zone, so no launcher mask clips it. Generated from
+  docs/icon/launcher-icon.svg; keep them in step.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Microphone, scaled from its 512 x 512 source to 50 units tall. -->
+    <group
+        android:scaleX="0.0976562"
+        android:scaleY="0.0976562"
+        android:translateX="19"
+        android:translateY="29">
+        <path
+            android:fillColor="#FF5A6068"
+            android:pathData="M136,232h24v16h-24z" />
+        <path
+            android:fillColor="#FF5A6068"
+            android:pathData="M352,232h24v16h-24z" />
+        <path
+            android:fillColor="#FFC3C7CC"
+            android:pathData="M256,0c-48.6,0-88,39.4-88,88v176c0,48.6,39.4,88,88,88s88-39.4,88-88V88C344,39.4,304.6,0,256,0z" />
+        <path
+            android:fillColor="#FF8B9097"
+            android:pathData="M392,200c-8.84,0-16,7.16-16,16v48c0,66.272-53.728,120-120,120s-120-53.728-120-120v-48 c0-8.84-7.16-16-16-16s-16,7.16-16,16v48c0.088,74.616,54.32,138.136,128,149.92V464h48v-50.08 c73.68-11.784,127.912-75.304,128-149.92v-48C408,207.16,400.84,200,392,200z" />
+        <path
+            android:fillColor="#FFE8B93E"
+            android:pathData="M168,224h176c4.416,0,8,3.584,8,8v16c0,4.416-3.584,8-8,8H168c-4.416,0-8-3.584-8-8v-16 C160,227.584,163.584,224,168,224z" />
+        <path
+            android:fillColor="#FF2B2E33"
+            android:pathData="M168,264c0,48.6,39.4,88,88,88s88-39.4,88-88v-8H168V264z" />
+        <path
+            android:fillColor="#FFC8941F"
+            android:pathData="M344,256h-16v-32h16c4.416,0,8,3.584,8,8v16C352,252.416,348.416,256,344,256z" />
+        <path
+            android:fillColor="#FF70767E"
+            android:pathData="M232,88a8,8 0,1 0,16 0a8,8 0,1 0,-16 0z" />
+        <path
+            android:fillColor="#FF70767E"
+            android:pathData="M200,88a8,8 0,1 0,16 0a8,8 0,1 0,-16 0z" />
+        <path
+            android:fillColor="#FF70767E"
+            android:pathData="M264,88a8,8 0,1 0,16 0a8,8 0,1 0,-16 0z" />
+        <path
+            android:fillColor="#FF70767E"
+            android:pathData="M248,120a8,8 0,1 0,16 0a8,8 0,1 0,-16 0z" />
+        <path
+            android:fillColor="#FF70767E"
+            android:pathData="M216,120a8,8 0,1 0,16 0a8,8 0,1 0,-16 0z" />
+        <path
+            android:fillColor="#FF70767E"
+            android:pathData="M280,120a8,8 0,1 0,16 0a8,8 0,1 0,-16 0z" />
+        <path
+            android:fillColor="#FF70767E"
+            android:pathData="M248,56a8,8 0,1 0,16 0a8,8 0,1 0,-16 0z" />
+        <path
+            android:fillColor="#FF70767E"
+            android:pathData="M216,56a8,8 0,1 0,16 0a8,8 0,1 0,-16 0z" />
+        <path
+            android:fillColor="#FF70767E"
+            android:pathData="M280,56a8,8 0,1 0,16 0a8,8 0,1 0,-16 0z" />
+        <path
+            android:fillColor="#FF70767E"
+            android:pathData="M248,184a8,8 0,1 0,16 0a8,8 0,1 0,-16 0z" />
+        <path
+            android:fillColor="#FF70767E"
+            android:pathData="M216,184a8,8 0,1 0,16 0a8,8 0,1 0,-16 0z" />
+        <path
+            android:fillColor="#FF70767E"
+            android:pathData="M280,184a8,8 0,1 0,16 0a8,8 0,1 0,-16 0z" />
+        <path
+            android:fillColor="#FF70767E"
+            android:pathData="M296,88a8,8 0,1 0,16 0a8,8 0,1 0,-16 0z" />
+        <path
+            android:fillColor="#FF70767E"
+            android:pathData="M232,152a8,8 0,1 0,16 0a8,8 0,1 0,-16 0z" />
+        <path
+            android:fillColor="#FF70767E"
+            android:pathData="M200,152a8,8 0,1 0,16 0a8,8 0,1 0,-16 0z" />
+        <path
+            android:fillColor="#FF70767E"
+            android:pathData="M264,152a8,8 0,1 0,16 0a8,8 0,1 0,-16 0z" />
+        <path
+            android:fillColor="#FF70767E"
+            android:pathData="M296,152a8,8 0,1 0,16 0a8,8 0,1 0,-16 0z" />
+        <path
+            android:fillColor="#FF1B1D20"
+            android:pathData="M168,256v8c0,2.72,0,5.36,0.4,8h149.52c4.416-0.12,8.096,3.368,8.216,7.784 c0.016,0.696-0.056,1.384-0.216,2.056c-8.168,31.928-36.968,54.232-69.92,54.16c-4.416,0-8,3.584-8,8s3.584,8,8,8 c45.488-0.016,83.464-34.704,87.6-80l0,0c0-2.64,0.4-5.28,0.4-8v-8H168z" />
+        <path
+            android:fillColor="#FF8B9097"
+            android:pathData="M321.36,464H190.64c-4.24,0.016-8.296,1.712-11.28,4.72l-14.64,14.64 c-3.008,2.984-4.704,7.04-4.72,11.28V496c0,8.84,7.16,16,16,16h160c8.84,0,16-7.16,16-16v-1.36c-0.016-4.24-1.712-8.296-4.72-11.28 l-14.64-14.64C329.656,465.712,325.6,464.016,321.36,464z" />
+        <path
+            android:fillColor="#FF5A6068"
+            android:pathData="M347.28,483.28l-8-8c3.024,3.008,4.72,7.096,4.72,11.36V488c0,8.84-7.16,16-16,16H168 c-2.264-0.008-4.496-0.504-6.56-1.44c2.576,5.736,8.272,9.424,14.56,9.44h160c8.84,0,16-7.16,16-16v-1.36 C352,490.376,350.304,486.288,347.28,483.28z" />
+        <path
+            android:fillColor="#FF5A6068"
+            android:pathData="M256,416c-8.04-0.056-16.064-0.752-24-2.08v16c7.936,1.328,15.96,2.024,24,2.08 c3.736-0.68,7.32,1.8,8,5.536c0.152,0.816,0.152,1.648,0,2.464v24h16v-50.08C272.064,415.248,264.04,415.944,256,416z" />
+        <path
+            android:fillColor="#FFA3A8AF"
+            android:pathData="M328,224h16V96c0-4.416-3.584-8-8-8l0,0c-4.416,0-8,3.584-8,8V224z" />
+        <path
+            android:fillColor="#FFE3E5E8"
+            android:pathData="M264,8c0,4.416-3.584,8-8,8c-39.768,0-72,32.232-72,72c0,4.416-3.584,8-8,8s-8-3.584-8-8 c0-48.6,39.4-88,88-88C260.416,0,264,3.584,264,8z" />
+    </group>
+    <!-- Eighth note in the same flat style: stem, flag, then the head with shaded side and highlight. -->
+    <path
+        android:fillColor="#FFE8B93E"
+        android:pathData="M71.8,30.5h3.4v22h-3.4z" />
+    <path
+        android:fillColor="#FFC8941F"
+        android:pathData="M74.1,30.5h1.1v22h-1.1z" />
+    <path
+        android:fillColor="#FFE8B93E"
+        android:pathData="M73.5,30.5c0.6,4.6 3.2,6.3 5.6,8.4c2.4,2.1 3.6,4.6 2.3,8.6c-0.5,-3.4 -2.2,-5.4 -4.6,-6.9c-1.2,-0.8 -2.5,-1.4 -3.3,-2.4z" />
+    <group
+        android:pivotX="68.6"
+        android:pivotY="53"
+        android:rotation="-22">
+        <path
+            android:fillColor="#FFE8B93E"
+            android:pathData="M61.8,53a6.8,5.2 0,1 0,13.6 0a6.8,5.2 0,1 0,-13.6 0z" />
+        <path
+            android:fillColor="#FFC8941F"
+            android:pathData="M68.6,58.2a6.8,5.2 0,0 0,6.8 -5.2h-6.8z" />
+        <path
+            android:fillColor="#FFF6D77A"
+            android:pathData="M64.2,51.6a3.2,1.6 0,1 0,6.4 0a3.2,1.6 0,1 0,-6.4 0z" />
+    </group>
+</vector>
