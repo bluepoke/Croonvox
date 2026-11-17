@@ -214,7 +214,7 @@ Measured on one device, a Samsung Galaxy Tab S6 Lite (SM-P613: Snapdragon 720G /
 
 ## Proposed amendment to ADR 3 (draft)
 
-To become an ADR ("Separation Model catalogue after the separation spike"). The device numbers are in. Points in _italics_ are still open.
+Adopted as [ADR 15](../adr/0015-separation-model-catalogue-after-spike.md), which is authoritative. Kept here as the spike's original proposal. Points in _italics_ were open when it was written.
 
 - **Runtime:** ONNX Runtime (`onnxruntime-android`, MIT) on the CPU execution provider, 4 threads, with the CPU arena and memory-pattern optimisation **off**. No XNNPACK or NNAPI: neither was faster on the weak device. The full ORT build adds about 34 MB per ABI (arm64, uncompressed) to the APK. A reduced build containing only the operators the shipped models need (ORT's `--include_ops_by_config`) is a follow-up.
 - **Catalogue (first release):** both models are downloaded on demand, not bundled.
