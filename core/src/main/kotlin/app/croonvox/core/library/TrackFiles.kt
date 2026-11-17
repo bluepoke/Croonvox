@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package app.croonvox.core.library
 
+import app.croonvox.core.model.AppDirectory
 import app.croonvox.core.model.AudioFile
 import app.croonvox.core.model.SeparationModelId
 import app.croonvox.core.model.TakeId
@@ -15,6 +16,9 @@ interface TrackFiles {
 
     /** Location for the Instrumental and Vocal Stem that Separation with [model] produced. */
     fun stems(track: TrackId, model: SeparationModelId): Stems
+
+    /** Where a running Separation of [track] with [model] keeps its work so far (ADR 15). */
+    fun separationCheckpoint(track: TrackId, model: SeparationModelId): AppDirectory
 
     /** Location for a kept Take's audio (mono FLAC, ADR 8). */
     fun take(track: TrackId, take: TakeId): AudioFile

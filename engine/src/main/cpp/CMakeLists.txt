@@ -16,7 +16,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(signalsmith-stretch)
 
-# libFLAC (BSD-3-Clause): Takes are stored as mono FLAC (ADR 8). Only the C encoder/decoder
+# libFLAC (BSD-3-Clause): Takes (mono) and stems (stereo) are stored as FLAC (ADR 8). Only the C encoder/decoder
 # library is built, statically, without Ogg, programs, docs or tests.
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 set(BUILD_CXXLIBS OFF CACHE BOOL "" FORCE)
@@ -45,6 +45,7 @@ find_package(oboe REQUIRED CONFIG)
 add_library(croonvox_engine SHARED
         PlaybackEngine.cpp
         jni_bridge.cpp
+        flac_files.cpp
 )
 
 target_link_libraries(croonvox_engine PRIVATE oboe::oboe signalsmith-stretch FLAC log android)

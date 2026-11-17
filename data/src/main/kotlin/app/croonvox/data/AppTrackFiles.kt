@@ -3,6 +3,7 @@ package app.croonvox.data
 
 import app.croonvox.core.library.StagedFile
 import app.croonvox.core.library.TrackFiles
+import app.croonvox.core.model.AppDirectory
 import app.croonvox.core.model.AudioFile
 import app.croonvox.core.model.SeparationModelId
 import app.croonvox.core.model.TakeId
@@ -32,6 +33,9 @@ class AppTrackFiles(private val root: File) : TrackFiles {
         val dir = File(dirOf(track), "stems/${hash(model.value)}")
         return Stems(AudioFile(File(dir, "instrumental.flac").path), AudioFile(File(dir, "vocals.flac").path))
     }
+
+    override fun separationCheckpoint(track: TrackId, model: SeparationModelId): AppDirectory =
+        AppDirectory(File(dirOf(track), "stems/${hash(model.value)}.checkpoint").path)
 
     override fun take(track: TrackId, take: TakeId): AudioFile =
         AudioFile(File(dirOf(track), "takes/${hash(take.value)}.flac").path)

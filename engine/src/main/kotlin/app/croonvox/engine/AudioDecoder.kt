@@ -7,8 +7,11 @@ import android.media.MediaExtractor
 import android.media.MediaFormat
 import java.nio.ByteOrder
 
-/** Decodes the first audio track of a file (audio or video container) to float PCM, chunk by chunk. */
-internal object AudioDecoder {
+/**
+ * Decodes the first audio track of a file (audio or video container) to float PCM, chunk by chunk.
+ * Used for playback and, by the same code path, for Separation, so stems line up with what plays.
+ */
+object AudioDecoder {
     interface Sink {
         /** [estimatedFrames] is derived from the container's duration, 0 if unknown. */
         fun begin(channels: Int, sampleRate: Int, estimatedFrames: Long)

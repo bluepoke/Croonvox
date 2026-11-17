@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import app.croonvox.core.library.TrackRepository
 import app.croonvox.core.model.Track
 import app.croonvox.core.model.TrackId
+import app.croonvox.core.model.TrackPipelineState
+import app.croonvox.core.pipeline.TrackPipeline
 import app.croonvox.core.player.OpenTrack
 import app.croonvox.core.player.TrackPlayer
 import app.croonvox.core.port.Playback
@@ -21,6 +23,7 @@ class TrackDetailViewModel(
     private val id: TrackId,
     tracks: TrackRepository,
     private val player: TrackPlayer,
+    private val pipeline: TrackPipeline,
 ) : ViewModel() {
     val track: StateFlow<Track?> = tracks.observe(id).stateIn(viewModelScope, SharingStarted.Eagerly, null)
     val playback: StateFlow<Playback> = player.playback
@@ -45,21 +48,27 @@ class TrackDetailViewModel(
         open()
         // A Session opened from here releases the Audio Engine only after this screen resumes.
         viewModelScope.launch { playback.collect { if (resumed) reopenIfReleased() } }
+        // Separation finished while this screen is open: switch to the Instrumental (ADR 10).
+        viewModelScope.launch { track.collect { if (resumed) switchIfReady() } }
     }
 
     fun onResume() {
         resumed = true
         reopenIfReleased()
+        switchIfReady()
     }
 
     fun onPause() {
         resumed = false
     }
 
-    private fun open() {
+    private fun open(atMs: Long = 0, play: Boolean = false) {
         opening = viewModelScope.launch {
             try {
-                opened = player.open(id) { _loadProgress.value = it }
+                val track = player.open(id) { _loadProgress.value = it }
+                opened = track
+                if (atMs > 0) track.seekTo(atMs)
+                if (play) track.play()
                 _ready.value = true
             } catch (e: CancellationException) {
                 throw e
@@ -75,6 +84,25 @@ class TrackDetailViewModel(
         _ready.value = false
         _loadProgress.value = 0f
         open()
+    }
+
+    /**
+     * Loads the Instrumental in place of the Original Audio once the Track is Ready, at the same
+     * position and still playing if it was: the stems are sample-aligned with the Original Audio.
+     */
+    private fun switchIfReady() {
+        val current = opened ?: return
+        if (opening?.isActive == true) return
+        if (current.track.pipeline is TrackPipelineState.Ready || track.value?.pipeline !is TrackPipelineState.Ready) return
+        val state = playback.value
+        _ready.value = false
+        _loadProgress.value = 0f
+        open(atMs = state.positionMs, play = state.playing)
+    }
+
+    /** Runs a failed Separation again. */
+    fun retry() {
+        viewModelScope.launch { pipeline.retry(id) }
     }
 
     fun togglePlay() {

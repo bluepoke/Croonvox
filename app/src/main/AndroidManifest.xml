@@ -1,8 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Recording Takes. Asked for only when the user first records (spec #1, story 85). -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- Separation Models are downloaded on first use (ADR 15), in both flavors. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Separation runs as a foreground job with a progress notification (ADR 10, ADR 15). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROCESSING" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:name=".CroonvoxApp"
@@ -25,6 +35,12 @@
                 <data android:mimeType="video/*" />
             </intent-filter>
         </activity>
+
+        <!-- WorkManager's foreground service, with the types SeparationWorker asks for. -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync|mediaProcessing"
+            tools:node="merge" />
     </application>
 
 </manifest>

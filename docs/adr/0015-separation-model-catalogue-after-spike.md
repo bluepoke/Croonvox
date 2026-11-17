@@ -30,10 +30,15 @@ The separation spike (#3, findings in `docs/spikes/separation-spike.md`) ran ADR
   - The model estimates one source, and the other stem is the input minus it (at 44.1 kHz). So Instrumental + Vocal Stem equals the resampled Original Audio, band-limited to about 21 kHz.
 - **Background job:** the resumable Separation job (ADR 3) is checkpointed per segment, so a killed process resumes where it stopped. It runs as a **foreground service** with a notification. Best peaks at about 1.2 GB RSS on a 3.7 GB device, and Android kills a background process sooner than a foreground one.
 
+## Note: first implementation (#7)
+- Until the project hosts the model files (#21), the Fast model is downloaded from the sherpa-onnx GitHub release it was measured with, pinned by SHA-256.
+- The foreground service type is `mediaProcessing` from Android 15 and `dataSync` before. Android 12+ may refuse to start a foreground service for a job that starts in the background (e.g. after process death); the job then runs without one and, if the system stops it, continues later from its checkpoint.
+- Checkpoints are 4-channel 24-bit FLAC files per segment at the model's rate, and a resumed run decodes the Original Audio again from the start. The overlapping segment before the first missing one is separated again, so the result matches an uninterrupted run exactly.
+
 ## Consequences
 - "Instrumental" and "Vocal Stem" depend on the Separation Model: whether backing vocals count as removed vocal is up to the model (see `GLOSSARY.md`).
 - On the weak device, Fast takes about 0.16× the Track's length and Best about 3.4×, so Best takes about 13 min for a 4-minute song and about 32 min for a 9-minute one. The UI has to treat Best as a long background job.
 - The full ORT build adds about 34 MB per ABI (arm64, uncompressed) to the APK. A reduced build with only the operators the shipped models need (ORT's `--include_ops_by_config`) is a follow-up.
-- The foreground service type for the Separation job (e.g. `dataSync`, or `mediaProcessing` from Android 15) and any time limits on it are still to be checked.
+- Android 15 limits `dataSync` and `mediaProcessing` foreground services to 6 hours a day. That is enough for Fast; Best (#17) has to be checked against it.
 - Only one device was measured. Thread counts 2 / 4 / 8 weren't compared on the CPU provider, and the XNNPACK and NNAPI runs weren't clean one-factor comparisons.
 - The spike's shortcuts (no checksums or resumable downloads, raw temp files, 16-bit WAV stems, foreground-only runs) are listed in the findings and must not be copied into production.

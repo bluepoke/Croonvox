@@ -55,7 +55,7 @@ class MainActivity : ComponentActivity() {
                         val args = checkNotNull(entry.arguments)
                         val id = TrackId(SourceId(checkNotNull(args.getString("source"))), checkNotNull(args.getString("id")))
                         // ViewModels here are scoped to this back-stack entry and cleared on Back.
-                        TrackDetailRoute(id, container.trackRepository, container.trackPlayer, onSing = { nav.openSession(id) })
+                        TrackDetailRoute(id, container.trackRepository, container.trackPlayer, container.trackPipeline, onSing = { nav.openSession(id) })
                     }
                     composable(
                         SESSION,

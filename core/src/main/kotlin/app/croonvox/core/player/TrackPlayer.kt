@@ -5,12 +5,16 @@ import app.croonvox.core.library.TrackFiles
 import app.croonvox.core.library.TrackRepository
 import app.croonvox.core.model.Track
 import app.croonvox.core.model.TrackId
+import app.croonvox.core.model.TrackPipelineState
 import app.croonvox.core.port.AudioEngine
 import app.croonvox.core.port.LoadId
 import app.croonvox.core.port.Playback
 import kotlinx.coroutines.flow.StateFlow
 
-/** Plays a Track's Original Audio through the Audio Engine (Track detail, before Sessions exist). */
+/**
+ * Plays a Track through the Audio Engine on Track detail: its Instrumental once the Track is
+ * Ready, its Original Audio before (ADR 10).
+ */
 class TrackPlayer(
     private val tracks: TrackRepository,
     private val files: TrackFiles,
@@ -19,19 +23,23 @@ class TrackPlayer(
     val playback: StateFlow<Playback> get() = engine.playback
 
     /**
-     * Loads the Track's Original Audio, paused at the start, and returns a handle to control it.
+     * Loads the Track's Instrumental (or Original Audio), paused at the start, and returns a handle to control it.
      * [onProgress] receives 0..1 while the audio is prepared.
      * @throws NotPlayableYet if the Track Pipeline hasn't stored the Original Audio yet.
      */
     suspend fun open(id: TrackId, onProgress: (Float) -> Unit = {}): OpenTrack {
         val track = checkNotNull(tracks.get(id)) { "no Track $id" }
         if (!track.hasOriginalAudio) throw NotPlayableYet(track)
-        val load = engine.load(files.originalAudio(id), onProgress)
+        val audio = when (val pipeline = track.pipeline) {
+            is TrackPipelineState.Ready -> files.stems(id, pipeline.model).instrumental
+            else -> files.originalAudio(id)
+        }
+        val load = engine.load(audio, onProgress)
         return OpenTrack(track, load, engine)
     }
 }
 
-/** A Track whose Original Audio is loaded for playback. */
+/** A Track whose audio is loaded for playback, as the Track was when it was opened. */
 class OpenTrack internal constructor(
     val track: Track,
     private val load: LoadId,

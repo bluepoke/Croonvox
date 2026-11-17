@@ -9,9 +9,12 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [TrackEntity::class, TakeEntity::class, SettingEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = true,
-    autoMigrations = [AutoMigration(from = 1, to = 2)], // 2: takes and settings tables (#8)
+    autoMigrations = [
+        AutoMigration(from = 1, to = 2), // 2: takes and settings tables (#8)
+        AutoMigration(from = 2, to = 3), // 3: pipeline progress and failure reason (#7)
+    ],
 )
 abstract class CroonvoxDatabase : RoomDatabase() {
     internal abstract fun tracks(): TrackDao

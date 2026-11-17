@@ -12,6 +12,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
@@ -29,16 +30,25 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import app.croonvox.core.library.TrackRepository
+import app.croonvox.core.model.PipelineStep
 import app.croonvox.core.model.TrackId
+import app.croonvox.core.model.TrackPipelineState
+import app.croonvox.core.pipeline.TrackPipeline
 import app.croonvox.core.player.TrackPlayer
 import app.croonvox.core.port.Playback
 import app.croonvox.ui.formatTime
-import app.croonvox.ui.subtitle
+import app.croonvox.ui.label
 
 @Composable
-fun TrackDetailRoute(id: TrackId, tracks: TrackRepository, player: TrackPlayer, onSing: () -> Unit) {
+fun TrackDetailRoute(
+    id: TrackId,
+    tracks: TrackRepository,
+    player: TrackPlayer,
+    pipeline: TrackPipeline,
+    onSing: () -> Unit,
+) {
     val viewModel: TrackDetailViewModel = viewModel(
-        factory = viewModelFactory { initializer { TrackDetailViewModel(id, tracks, player) } },
+        factory = viewModelFactory { initializer { TrackDetailViewModel(id, tracks, player, pipeline) } },
     )
     val track by viewModel.track.collectAsStateWithLifecycle()
     val playback by viewModel.playback.collectAsStateWithLifecycle()
@@ -52,7 +62,8 @@ fun TrackDetailRoute(id: TrackId, tracks: TrackRepository, player: TrackPlayer, 
     }
     TrackDetailScreen(
         title = track?.title ?: "",
-        subtitle = track?.subtitle().orEmpty(),
+        subtitle = track?.artist.orEmpty(),
+        pipeline = track?.pipeline,
         playback = playback,
         ready = ready,
         loadProgress = loadProgress,
@@ -60,6 +71,7 @@ fun TrackDetailRoute(id: TrackId, tracks: TrackRepository, player: TrackPlayer, 
         canSing = track?.hasOriginalAudio == true,
         onTogglePlay = viewModel::togglePlay,
         onSeek = viewModel::seekTo,
+        onRetry = viewModel::retry,
         onSing = {
             viewModel.pause()
             onSing()
@@ -72,6 +84,7 @@ fun TrackDetailRoute(id: TrackId, tracks: TrackRepository, player: TrackPlayer, 
 fun TrackDetailScreen(
     title: String,
     subtitle: String,
+    pipeline: TrackPipelineState?,
     playback: Playback,
     ready: Boolean,
     loadProgress: Float,
@@ -79,6 +92,7 @@ fun TrackDetailScreen(
     canSing: Boolean,
     onTogglePlay: () -> Unit,
     onSeek: (Long) -> Unit,
+    onRetry: () -> Unit,
     onSing: () -> Unit,
 ) {
     Scaffold(
@@ -94,6 +108,7 @@ fun TrackDetailScreen(
             if (subtitle.isNotEmpty()) {
                 Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            if (pipeline != null) PipelineStatus(pipeline, onRetry)
             when {
                 error != null -> Text("Can't play this Track: $error", color = MaterialTheme.colorScheme.error)
                 !ready -> {
@@ -136,4 +151,28 @@ private fun PlaybackControls(playback: Playback, onTogglePlay: () -> Unit, onSee
         )
     }
     Button(onClick = onTogglePlay) { Text(if (playback.playing) "Pause" else "Play") }
+}
+
+/** Where the Track is in the Track Pipeline, and what plays meanwhile (ADR 10). */
+@Composable
+private fun PipelineStatus(pipeline: TrackPipelineState, onRetry: () -> Unit) {
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    when (pipeline) {
+        is TrackPipelineState.Separating -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(pipeline.label(), style = MaterialTheme.typography.bodyMedium)
+            val progress = pipeline.progress
+            if (progress == null) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            } else {
+                LinearProgressIndicator(progress = { progress.fraction }, modifier = Modifier.fillMaxWidth())
+            }
+            Text("Playing the original audio until the instrumental is ready.", style = MaterialTheme.typography.bodySmall, color = muted)
+        }
+        is TrackPipelineState.Failed -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("${pipeline.label()}: ${pipeline.reason}", color = MaterialTheme.colorScheme.error)
+            if (pipeline.step == PipelineStep.Separating) OutlinedButton(onClick = onRetry) { Text("Retry") }
+        }
+        is TrackPipelineState.Ready -> Text("Playing the instrumental", style = MaterialTheme.typography.bodySmall, color = muted)
+        TrackPipelineState.Added, TrackPipelineState.Downloaded -> Text(pipeline.label(), style = MaterialTheme.typography.bodySmall, color = muted)
+    }
 }

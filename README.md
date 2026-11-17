@@ -32,6 +32,7 @@ Modules:
 - `data`: Room database and app-private file store, implementing the core's interfaces
 - `app`: Android application (UI, wiring), in two flavors: `network` (with network Sources) and `local` (Local File Source only, Play-Store-safe; see ADR 1)
 - `engine`: native Audio Engine (C++ via CMake and the NDK)
+- `separation`: the `Separator` in pure Kotlin: the Separation Model catalogue and its download, DSP, and chunked Separation checkpointed per segment, on ONNX Runtime (ADR 15)
 - `spikes/*`: throwaway spikes that validate ADRs on hardware ([`audio-engine`](docs/spikes/audio-engine-spike.md), [`separation`](docs/spikes/separation-spike.md)); not shipped
 
 ## Documentation

@@ -25,5 +25,5 @@ class RoomTrackRepository(
     override suspend fun addIfAbsent(track: Track): Track = dao.insertIfAbsent(track.toEntity(clock())).toTrack()
 
     override suspend fun updatePipeline(id: TrackId, state: TrackPipelineState): Track =
-        dao.updatePipelineState(id.source.value, id.sourceTrackId, state.toColumn()).toTrack()
+        dao.updatePipeline(id.source.value, id.sourceTrackId, state.toColumns()).toTrack()
 }

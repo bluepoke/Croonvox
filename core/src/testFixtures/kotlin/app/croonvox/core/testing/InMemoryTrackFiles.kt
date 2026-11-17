@@ -3,6 +3,7 @@ package app.croonvox.core.testing
 
 import app.croonvox.core.library.StagedFile
 import app.croonvox.core.library.TrackFiles
+import app.croonvox.core.model.AppDirectory
 import app.croonvox.core.model.AudioFile
 import app.croonvox.core.model.SeparationModelId
 import app.croonvox.core.model.TakeId
@@ -29,6 +30,9 @@ class InMemoryTrackFiles : TrackFiles {
         instrumental = AudioFile("/mem/${track.key}/${model.value}/instrumental"),
         vocalStem = AudioFile("/mem/${track.key}/${model.value}/vocals"),
     )
+
+    override fun separationCheckpoint(track: TrackId, model: SeparationModelId) =
+        AppDirectory("/mem/${track.key}/${model.value}/checkpoint")
 
     override fun take(track: TrackId, take: TakeId) = AudioFile("/mem/${track.key}/takes/${take.value}")
 

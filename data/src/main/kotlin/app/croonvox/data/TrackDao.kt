@@ -19,13 +19,23 @@ internal abstract class TrackDao {
     @Query("SELECT * FROM tracks WHERE source = :source AND source_track_id = :sourceTrackId")
     abstract fun observe(source: String, sourceTrackId: String): Flow<TrackEntity?>
 
-    @Query("UPDATE tracks SET pipeline_state = :state WHERE source = :source AND source_track_id = :sourceTrackId")
-    protected abstract suspend fun setPipelineState(source: String, sourceTrackId: String, state: String): Int
+    @Query(
+        "UPDATE tracks SET pipeline_state = :state, pipeline_progress = :progress, pipeline_failure = :failure " +
+            "WHERE source = :source AND source_track_id = :sourceTrackId",
+    )
+    protected abstract suspend fun setPipeline(
+        source: String,
+        sourceTrackId: String,
+        state: String,
+        progress: String?,
+        failure: String?,
+    ): Int
 
-    /** Sets the pipeline column of an existing row and returns the updated row. */
+    /** Sets the pipeline columns of an existing row and returns the updated row. */
     @Transaction
-    open suspend fun updatePipelineState(source: String, sourceTrackId: String, state: String): TrackEntity {
-        check(setPipelineState(source, sourceTrackId, state) == 1) { "no Track $source:$sourceTrackId" }
+    open suspend fun updatePipeline(source: String, sourceTrackId: String, pipeline: PipelineColumns): TrackEntity {
+        val updated = setPipeline(source, sourceTrackId, pipeline.state, pipeline.progress, pipeline.failure)
+        check(updated == 1) { "no Track $source:$sourceTrackId" }
         return checkNotNull(get(source, sourceTrackId))
     }
 

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package app.croonvox.core.model
 
+import app.croonvox.core.port.SeparationProgress
+
 /** A song the user added (GLOSSARY: Track), identified by its Source and source ID (ADR 10). */
 data class Track(
     val id: TrackId,
@@ -11,7 +13,11 @@ data class Track(
 ) {
     /** The Original Audio is stored, so the Track can be played and sung (ADR 10). */
     val hasOriginalAudio: Boolean
-        get() = pipeline == TrackPipelineState.Downloaded || pipeline is TrackPipelineState.Ready
+        get() = when (pipeline) {
+            TrackPipelineState.Added -> false
+            TrackPipelineState.Downloaded, is TrackPipelineState.Separating, is TrackPipelineState.Ready -> true
+            is TrackPipelineState.Failed -> pipeline.step != PipelineStep.Downloading
+        }
 }
 
 /** Track identity: the Source plus that Source's own ID for the item (ADR 10). */
@@ -40,8 +46,23 @@ sealed interface TrackPipelineState {
     /** Original Audio is stored locally; a Session can start (ADR 10). */
     data object Downloaded : TrackPipelineState
 
+    /**
+     * Separation with [model] is queued or running; [progress] is null until it has started.
+     * The Original Audio stays playable meanwhile.
+     */
+    data class Separating(val model: SeparationModelId, val progress: SeparationProgress? = null) : TrackPipelineState
+
     /** Separation with [model] has finished: its Instrumental and Vocal Stem are stored. */
     data class Ready(val model: SeparationModelId) : TrackPipelineState
+
+    /** [step] stopped for a [reason] that retrying alone won't fix; the user can retry. */
+    data class Failed(val step: PipelineStep, val reason: String) : TrackPipelineState
+}
+
+/** A step of the Track Pipeline that can fail (ADR 10). */
+enum class PipelineStep {
+    Downloading,
+    Separating,
 }
 
 /** Identifies one Separation Model of the catalogue (ADR 3). */

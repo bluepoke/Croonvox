@@ -2,6 +2,7 @@
 package app.croonvox.core
 
 import app.croonvox.core.library.ImportLocalFile
+import app.croonvox.core.model.SeparationModelId
 import app.croonvox.core.model.SourceId
 import app.croonvox.core.model.Track
 import app.croonvox.core.model.TrackId
@@ -80,5 +81,21 @@ class TrackPlayerTest {
         assertTrue(progress.isNotEmpty())
         assertEquals(1f, progress.last())
         assertEquals(progress.sorted(), progress)
+    }
+
+    @Test
+    fun `a Ready Track plays its Instrumental, a Track still Separating its Original Audio`() = runTest {
+        val model = SeparationModelId("fast")
+        val ready = import(FakeLocalFile(displayName = "a.mp3", content = "audio-a"))
+        tracks.updatePipeline(ready.id, TrackPipelineState.Ready(model))
+        val separating = import(FakeLocalFile(displayName = "b.mp3", content = "audio-b"))
+        tracks.updatePipeline(separating.id, TrackPipelineState.Separating(model))
+
+        player.open(ready.id)
+        val readyLoaded = player.playback.value.loaded
+        player.open(separating.id)
+
+        assertEquals(files.stems(ready.id, model).instrumental, readyLoaded)
+        assertEquals(files.originalAudio(separating.id), player.playback.value.loaded)
     }
 }

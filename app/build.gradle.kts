@@ -49,12 +49,19 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+
+    packaging {
+        resources.excludes += listOf("META-INF/LICENSE*", "META-INF/NOTICE*")
+    }
 }
 
 dependencies {
     implementation(project(":core"))
     implementation(project(":data"))
     implementation(project(":engine"))
+    implementation(project(":separation"))
+    implementation(libs.onnxruntime.android)
+    implementation(libs.core.ktx)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.work.runtime.ktx)
     implementation(libs.lifecycle.viewmodel.compose)
