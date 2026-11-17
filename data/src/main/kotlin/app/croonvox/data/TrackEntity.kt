@@ -74,12 +74,14 @@ private fun PipelineColumns.toState(): TrackPipelineState = when {
 
 private fun SeparationProgress.toColumn(): String = when (stage) {
     SeparationProgress.Stage.DownloadingModel -> "downloading_model"
+    SeparationProgress.Stage.InstallingModel -> "installing_model"
     SeparationProgress.Stage.Separating -> "separating"
 } + ":$fraction"
 
 private fun progressFromColumn(value: String): SeparationProgress {
     val stage = when (value.substringBefore(':')) {
         "downloading_model" -> SeparationProgress.Stage.DownloadingModel
+        "installing_model" -> SeparationProgress.Stage.InstallingModel
         "separating" -> SeparationProgress.Stage.Separating
         else -> error("unknown progress '$value'")
     }

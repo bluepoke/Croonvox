@@ -24,6 +24,7 @@ class TrackEntityTest {
             TrackPipelineState.Downloaded,
             TrackPipelineState.Separating(model),
             TrackPipelineState.Separating(model, SeparationProgress(SeparationProgress.Stage.DownloadingModel, 0.25f)),
+            TrackPipelineState.Separating(model, SeparationProgress(SeparationProgress.Stage.InstallingModel, 0.75f)),
             TrackPipelineState.Separating(model, SeparationProgress(SeparationProgress.Stage.Separating, 0.5f)),
             TrackPipelineState.Ready(model),
             TrackPipelineState.Failed(PipelineStep.Separating, "no decoder for audio/x-weird"),

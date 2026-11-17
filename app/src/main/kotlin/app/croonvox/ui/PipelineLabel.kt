@@ -14,6 +14,7 @@ fun TrackPipelineState.label(): String = when (this) {
         when (p?.stage) {
             null -> "Waiting to remove vocals"
             SeparationProgress.Stage.DownloadingModel -> "Downloading model ${percent(p.fraction)}"
+            SeparationProgress.Stage.InstallingModel -> "Installing model ${percent(p.fraction)}"
             SeparationProgress.Stage.Separating -> "Removing vocals ${percent(p.fraction)}"
         }
     }

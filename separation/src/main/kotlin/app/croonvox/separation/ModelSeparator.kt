@@ -44,7 +44,11 @@ class ModelSeparator(
             ?: throw SeparationFailed("unknown Separation Model '${model.value}'", retryable = false)
         val modelDir = try {
             runInterruptible(Dispatchers.IO) {
-                models.install(entry) { onProgress(SeparationProgress(SeparationProgress.Stage.DownloadingModel, it)) }
+                models.install(
+                    entry,
+                    onDownload = { onProgress(SeparationProgress(SeparationProgress.Stage.DownloadingModel, it)) },
+                    onInstall = { onProgress(SeparationProgress(SeparationProgress.Stage.InstallingModel, it)) },
+                )
             }
         } catch (e: ModelCorrupt) {
             throw SeparationFailed(e.message ?: "model download corrupt", retryable = false, e)

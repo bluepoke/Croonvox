@@ -75,6 +75,7 @@ class SeparationWorker(context: Context, params: WorkerParameters) : CoroutineWo
         val progress = (track?.pipeline as? TrackPipelineState.Separating)?.progress
         val text = when (progress?.stage) {
             SeparationProgress.Stage.DownloadingModel -> "Downloading the vocal removal model…"
+            SeparationProgress.Stage.InstallingModel -> "Installing the vocal removal model… ${(progress.fraction * 100).toInt()} %"
             SeparationProgress.Stage.Separating -> "Removing vocals… ${(progress.fraction * 100).toInt()} %"
             null -> "Waiting to remove vocals…"
         }

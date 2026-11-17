@@ -31,17 +31,20 @@ class ModelStore(private val root: File, private val http: Http = UrlHttp) {
 
     /**
      * Returns the directory with [model]'s files, downloading them first if needed. Blocking;
-     * interrupting the thread cancels it. [onProgress] receives the downloaded fraction.
+     * interrupting the thread cancels it. [onDownload] receives the downloaded fraction, then
+     * [onInstall] the fraction verified and unpacked (that takes a while on slow devices).
      * @throws IOException on network errors (worth retrying) or [ModelCorrupt].
      */
-    fun install(model: SeparationModel, onProgress: (Float) -> Unit = {}): File {
+    fun install(model: SeparationModel, onDownload: (Float) -> Unit = {}, onInstall: (Float) -> Unit = {}): File {
         val dir = File(root, model.id.value)
         val download = model.download ?: return dir
         if (download.files.all { File(dir, it).isFile }) return dir
         root.mkdirs()
         val part = File(root, "${model.id.value}.download")
-        fetch(download, part, onProgress)
-        val actual = sha256(part)
+        fetch(download, part, onDownload)
+        // Verifying reads the archive once, unpacking once more: each is half of installing.
+        val size = part.length().toFloat()
+        val actual = sha256(part) { read -> onInstall(0.5f * read / size) }
         if (actual != download.sha256) {
             part.delete()
             throw ModelCorrupt("${model.name}: download has SHA-256 $actual, expected ${download.sha256}")
@@ -49,12 +52,13 @@ class ModelStore(private val root: File, private val http: Http = UrlHttp) {
         val unpacking = File(root, "${model.id.value}.unpacking")
         unpacking.deleteRecursively()
         unpacking.mkdirs()
-        extract(part, unpacking, download.files)
+        extract(part, unpacking, download.files) { read -> onInstall(0.5f + 0.5f * read / size) }
         val missing = download.files.filterNot { File(unpacking, it).isFile }
         if (missing.isNotEmpty()) throw ModelCorrupt("${model.name}: download lacks $missing")
         dir.deleteRecursively()
         if (!unpacking.renameTo(dir)) throw IOException("could not move $unpacking to $dir")
         part.delete()
+        onInstall(1f)
         return dir
     }
 
@@ -82,11 +86,12 @@ class ModelStore(private val root: File, private val http: Http = UrlHttp) {
         if (part.length() < download.bytes) throw IOException("download ended early at ${part.length()} of ${download.bytes} bytes")
     }
 
-    private fun sha256(file: File): String {
+    private fun sha256(file: File, onRead: (Long) -> Unit): String {
         val digest = MessageDigest.getInstance("SHA-256")
-        file.inputStream().use { input ->
+        CountingStream(file.inputStream(), onRead).use { input ->
             val buffer = ByteArray(1 shl 16)
             while (true) {
+                if (Thread.interrupted()) throw InterruptedException("install cancelled")
                 val n = input.read(buffer)
                 if (n < 0) break
                 digest.update(buffer, 0, n)
@@ -95,16 +100,37 @@ class ModelStore(private val root: File, private val http: Http = UrlHttp) {
         return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
-    /** Unpacks the entries named in [wanted] (by file name, ignoring directories) from a `.tar.bz2`. */
-    private fun extract(archive: File, dir: File, wanted: List<String>) {
-        TarArchiveInputStream(BZip2CompressorInputStream(BufferedInputStream(archive.inputStream(), 1 shl 16))).use { tar ->
+    /**
+     * Unpacks the entries named in [wanted] (by file name, ignoring directories) from a `.tar.bz2`.
+     * [onRead] receives how many bytes of the archive were read so far.
+     */
+    private fun extract(archive: File, dir: File, wanted: List<String>, onRead: (Long) -> Unit) {
+        val compressed = BufferedInputStream(CountingStream(archive.inputStream(), onRead), 1 shl 16)
+        TarArchiveInputStream(BZip2CompressorInputStream(compressed)).use { tar ->
             while (true) {
+                if (Thread.interrupted()) throw InterruptedException("install cancelled")
                 val entry = tar.nextEntry ?: break
                 val name = entry.name.substringAfterLast('/')
                 if (entry.isDirectory || name !in wanted) continue
                 File(dir, name).outputStream().use { tar.copyTo(it, 1 shl 16) }
             }
         }
+    }
+
+    /** Reports the bytes read through it. */
+    private class CountingStream(private val input: InputStream, private val onRead: (Long) -> Unit) : InputStream() {
+        private var count = 0L
+
+        override fun read(): Int = input.read().also { if (it >= 0) onRead(++count) }
+
+        override fun read(b: ByteArray, off: Int, len: Int): Int = input.read(b, off, len).also {
+            if (it > 0) {
+                count += it
+                onRead(count)
+            }
+        }
+
+        override fun close() = input.close()
     }
 
     /** [Http] over `HttpURLConnection`, following redirects (GitHub release assets redirect to another host). */

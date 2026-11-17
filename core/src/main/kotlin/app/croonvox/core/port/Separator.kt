@@ -30,6 +30,9 @@ data class SeparationProgress(val stage: Stage, val fraction: Float) {
         /** The Separation Model's files are being downloaded (ADR 15). */
         DownloadingModel,
 
+        /** The downloaded model is being verified and unpacked. */
+        InstallingModel,
+
         /** The model runs over the Original Audio. */
         Separating,
     }
