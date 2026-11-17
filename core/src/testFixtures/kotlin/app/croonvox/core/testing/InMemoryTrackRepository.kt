@@ -41,4 +41,12 @@ class InMemoryTrackRepository : TrackRepository {
         }
         return checkNotNull(updated) { "no Track $id" }
     }
+
+    override suspend fun delete(id: TrackId) {
+        tracks.update { current -> current.filterNot { it.id == id } }
+    }
+
+    override suspend fun setLastSessionAt(id: TrackId, at: Long) {
+        tracks.update { current -> current.map { if (it.id == id) it.copy(lastSessionAt = at) else it } }
+    }
 }

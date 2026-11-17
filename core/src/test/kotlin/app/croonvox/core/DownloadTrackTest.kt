@@ -10,6 +10,7 @@ import app.croonvox.core.port.MediaUnavailable
 import app.croonvox.core.testing.FakeMediaDownloader
 import app.croonvox.core.testing.FakeSource
 import app.croonvox.core.testing.InMemoryTrackFiles
+import app.croonvox.core.testing.InMemoryTakeRepository
 import app.croonvox.core.testing.InMemoryTrackRepository
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -24,7 +25,7 @@ class DownloadTrackTest {
     private val youtube = FakeSource(SourceId("youtube"))
     private val downloader = FakeMediaDownloader(files)
     private val download = DownloadTrack(tracks, files, listOf(youtube), downloader)
-    private val library = Library(tracks)
+    private val library = Library(tracks, InMemoryTakeRepository())
 
     @Test
     fun `an added Track's audio is downloaded and kept as its Original Audio`() = runTest {

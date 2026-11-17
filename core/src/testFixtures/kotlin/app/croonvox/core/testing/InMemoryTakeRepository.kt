@@ -16,6 +16,8 @@ class InMemoryTakeRepository : TakeRepository {
     override fun observe(track: TrackId): Flow<List<Take>> =
         takes.map { all -> all.filter { it.track == track }.sortedBy { it.recordedAt } }
 
+    override fun observeCounts(): Flow<Map<TrackId, Int>> = takes.map { all -> all.groupingBy { it.track }.eachCount() }
+
     override suspend fun get(id: TakeId): Take? = takes.value.firstOrNull { it.id == id }
 
     override suspend fun add(take: Take) {
@@ -31,5 +33,9 @@ class InMemoryTakeRepository : TakeRepository {
 
     override suspend fun delete(id: TakeId) {
         takes.update { current -> current.filterNot { it.id == id } }
+    }
+
+    override suspend fun deleteAll(track: TrackId) {
+        takes.update { current -> current.filterNot { it.track == track } }
     }
 }

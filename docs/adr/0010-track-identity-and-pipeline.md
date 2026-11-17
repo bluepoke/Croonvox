@@ -1,6 +1,6 @@
 # 10. Track identity and processing pipeline
 
-- Status: Accepted (amended by ADR 14)
+- Status: Accepted (amended by ADR 14, ADR 17)
 - Date: 2026-11-15
 
 ## Decision
@@ -11,6 +11,9 @@
 
 ## Note: Vocal-Free Tracks (ADR 14)
 A Vocal-Free Track skips Separation and goes `Downloaded → Ready`. `Ready` means every step the Track needs is done, not that stems exist.
+
+## Note: deleted stems (ADR 17)
+Deleting a Ready Track's stems on the storage screen moves it to **Stems Deleted**, which the Track Pipeline doesn't queue. Opening the Track (Track detail or a Session) moves it back to `Separating` with the same model.
 
 ## Note: local import (#5)
 Importing a picked or shared file (Local File Source) is **not** a WorkManager job. The read grant for a picked or shared content URI does not survive the process, so a job retried after process death could not read the file. The import runs in one short in-process step instead: copy and hash, then the Track moves `Added → Downloaded`. Staging files of imports that never finished are deleted at the next start. An import that died after the Track row was written but before the file was stored leaves a Track in `Added`; importing the same file again completes it.

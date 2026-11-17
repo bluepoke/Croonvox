@@ -8,6 +8,7 @@ import app.croonvox.core.library.ImportLocalFile
 import app.croonvox.core.library.Library
 import app.croonvox.core.library.TrackFiles
 import app.croonvox.core.library.TrackRepository
+import app.croonvox.core.library.TrackStorage
 import app.croonvox.core.lyrics.FetchLyrics
 import app.croonvox.core.lyrics.LyricsOffset
 import app.croonvox.core.lyrics.LyricsPipeline
@@ -62,7 +63,10 @@ class AppContainer(private val context: Context) {
     val takeRepository: TakeRepository by lazy { RoomTakeRepository(database) }
     val settingsRepository: SettingsRepository by lazy { RoomSettingsRepository(database) }
 
-    val library: Library by lazy { Library(trackRepository) }
+    val library: Library by lazy { Library(trackRepository, takeRepository) }
+    val trackStorage: TrackStorage by lazy {
+        TrackStorage(trackRepository, takeRepository, trackFiles, pipelineJobs, SeparationCatalogue.models.map { it.id })
+    }
     val importLocalFile: ImportLocalFile by lazy { ImportLocalFile(trackRepository, trackFiles) }
     val trackPlayer: TrackPlayer by lazy { TrackPlayer(trackRepository, trackFiles, audioEngine) }
     val sessions: Sessions by lazy {

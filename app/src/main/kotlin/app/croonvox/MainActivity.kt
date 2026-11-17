@@ -23,7 +23,9 @@ import app.croonvox.importing.LinkImporter
 import app.croonvox.ui.library.LibraryRoute
 import app.croonvox.ui.lyrics.LyricsSearchRoute
 import app.croonvox.ui.search.SearchRoute
+import app.croonvox.separation.SeparationCatalogue
 import app.croonvox.ui.session.SessionRoute
+import app.croonvox.ui.storage.StorageRoute
 import app.croonvox.ui.theme.CroonvoxTheme
 import app.croonvox.ui.track.TrackDetailRoute
 
@@ -63,8 +65,12 @@ class MainActivity : ComponentActivity() {
                         LibraryRoute(
                             container.library, container.importer,
                             onOpen = { nav.openTrack(it) },
+                            onStorage = { nav.navigate(STORAGE) },
                             onSearch = if (container.sources.isEmpty()) null else ({ nav.navigate(SEARCH) }),
                         )
+                    }
+                    composable(STORAGE) {
+                        StorageRoute(container.trackStorage, SeparationCatalogue.models.associate { it.id to it.name })
                     }
                     composable(SEARCH) {
                         SearchRoute(container.sources, container.library, onAdded = { nav.openTrack(it) })
@@ -134,6 +140,7 @@ class MainActivity : ComponentActivity() {
     private companion object {
         const val LIBRARY = "library"
         const val SEARCH = "search"
+        const val STORAGE = "storage"
         const val TRACK = "track/{source}/{id}"
         const val SESSION = "session/{source}/{id}"
         const val LYRICS = "lyrics/{source}/{id}"

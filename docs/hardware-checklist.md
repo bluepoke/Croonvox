@@ -46,3 +46,13 @@ Prerequisites: network for the first run (the Fast model, 75 MB, is downloaded o
 7. **Alignment.** In a Session on the Instrumental, record a loopback Take over a passage with clear transients, then switch the Backing Audio to the Original Audio (or compare in an editor). The drums line up on both, at the start and at the end of the song.
 8. **Failure and Retry.** While a Track is still waiting for Separation, replace its Original Audio with a non-audio file (`adb shell run-as app.croonvox` and overwrite `files/tracks/<hash>/original`). The Track shows "Vocal removal failed" with a reason, and **Retry** queues it again.
 9. **Time and memory.** On the weakest device, note the time from "Removing vocals 0 %" to "Ready" for both songs (expected: about 0.2× the song length) and the peak memory in `adb shell dumpsys meminfo app.croonvox`.
+
+## Library details and storage (#20)
+
+Prerequisites: two Ready Tracks, one with two kept Takes. `adb shell run-as app.croonvox du -sh files/tracks/*` shows what is on disk.
+
+1. **Library rows.** The Track with Takes shows "2 Takes · Sung … ago"; the other shows "No Takes · Not sung yet". Open a Session on it, go back: it now shows "Sung 0 minutes ago" (or "just now").
+2. **Usage.** Open **Storage**. The sizes per Track match `du` within rounding: Original Audio, Stems (Fast), and each Take.
+3. **Delete stems.** Delete the stems of one Track after confirming. The Library shows "Stems deleted" and the stems directory is gone. Open the Track: the Original Audio plays, Separation runs again ("Removing vocals …%"), and playback switches to the Instrumental when it finishes. A kept Take still plays in sync over the new Instrumental.
+4. **Delete a Take.** Delete one Take: it is gone from Storage and from the Session's Take list, and its `.flac` file is gone.
+5. **Delete a Track while separating.** Import a song and, while it shows "Removing vocals", delete it from Storage. The notification goes away, the Track leaves the Library, and its directory under `files/tracks/` is gone and doesn't come back a minute later. Importing the same file again starts fresh.

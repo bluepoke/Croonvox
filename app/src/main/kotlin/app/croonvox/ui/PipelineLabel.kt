@@ -26,6 +26,7 @@ fun TrackPipelineState.label(): String = when (this) {
         }
     }
     is TrackPipelineState.Ready -> "Ready"
+    is TrackPipelineState.StemsDeleted -> "Stems deleted"
     is TrackPipelineState.Failed -> when (step) {
         PipelineStep.Downloading -> "Download failed"
         PipelineStep.Separating -> "Vocal removal failed"

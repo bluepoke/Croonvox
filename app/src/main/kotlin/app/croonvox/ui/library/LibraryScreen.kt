@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package app.croonvox.ui.library
 
+import android.text.format.DateUtils
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -35,14 +36,20 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import app.croonvox.core.library.Library
-import app.croonvox.core.model.Track
+import app.croonvox.core.library.LibraryEntry
 import app.croonvox.core.model.TrackId
 import app.croonvox.importing.Importer
 import app.croonvox.ui.subtitle
 import app.croonvox.ui.theme.CroonvoxTheme
 
 @Composable
-fun LibraryRoute(library: Library, importer: Importer, onOpen: (TrackId) -> Unit, onSearch: (() -> Unit)? = null) {
+fun LibraryRoute(
+    library: Library,
+    importer: Importer,
+    onOpen: (TrackId) -> Unit,
+    onStorage: () -> Unit,
+    onSearch: (() -> Unit)? = null,
+) {
     val viewModel: LibraryViewModel = viewModel(factory = viewModelFactory { initializer { LibraryViewModel(library) } })
     val state by viewModel.state.collectAsStateWithLifecycle()
     val importing by importer.importing.collectAsStateWithLifecycle()
@@ -54,6 +61,7 @@ fun LibraryRoute(library: Library, importer: Importer, onOpen: (TrackId) -> Unit
         importing = importing > 0,
         onImport = { picker.launch(arrayOf("audio/*", "video/*")) },
         onOpen = onOpen,
+        onStorage = onStorage,
         onSearch = onSearch,
     )
 }
@@ -65,6 +73,7 @@ fun LibraryScreen(
     importing: Boolean = false,
     onImport: () -> Unit = {},
     onOpen: (TrackId) -> Unit = {},
+    onStorage: () -> Unit = {},
     /** Opens the search; null when the app has no network Sources (local flavor). */
     onSearch: (() -> Unit)? = null,
 ) {
@@ -72,7 +81,10 @@ fun LibraryScreen(
         topBar = {
             TopAppBar(
                 title = { Text("Library") },
-                actions = { if (onSearch != null) TextButton(onClick = onSearch) { Text("Search songs") } },
+                actions = {
+                    if (onSearch != null) TextButton(onClick = onSearch) { Text("Search songs") }
+                    TextButton(onClick = onStorage) { Text("Storage") }
+                },
             )
         },
         floatingActionButton = { ExtendedFloatingActionButton(onClick = onImport) { Text("Import file") } },
@@ -84,7 +96,7 @@ fun LibraryScreen(
                     CircularProgressIndicator()
                 }
                 is LibraryUiState.Loaded ->
-                    if (state.tracks.isEmpty()) EmptyLibrary() else TrackList(state.tracks, onOpen)
+                    if (state.entries.isEmpty()) EmptyLibrary() else TrackList(state.entries, onOpen)
             }
         }
     }
@@ -109,18 +121,36 @@ private fun EmptyLibrary() {
 }
 
 @Composable
-private fun TrackList(tracks: List<Track>, onOpen: (TrackId) -> Unit) {
+private fun TrackList(entries: List<LibraryEntry>, onOpen: (TrackId) -> Unit) {
     // Bottom padding keeps the last row clear of the floating button.
     LazyColumn(contentPadding = PaddingValues(bottom = 88.dp)) {
-        items(tracks, key = { it.id.key }) { track ->
+        items(entries, key = { it.track.id.key }) { entry ->
             ListItem(
-                modifier = Modifier.clickable { onOpen(track.id) },
-                headlineContent = { Text(track.title) },
-                supportingContent = { Text(track.subtitle()) },
+                modifier = Modifier.clickable { onOpen(entry.track.id) },
+                headlineContent = { Text(entry.track.title) },
+                supportingContent = {
+                    Column {
+                        Text(entry.track.subtitle())
+                        Text(
+                            "${takeCount(entry.takeCount)} · ${lastSung(entry.track.lastSessionAt)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                },
             )
         }
     }
 }
+
+private fun takeCount(count: Int): String = when (count) {
+    0 -> "No Takes"
+    1 -> "1 Take"
+    else -> "$count Takes"
+}
+
+private fun lastSung(at: Long?): String =
+    if (at == null) "Not sung yet" else "Sung ${DateUtils.getRelativeTimeSpanString(at, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS)}"
 
 @Preview
 @Composable

@@ -15,5 +15,7 @@ class CroonvoxApp : Application() {
         container.appScope.launch { container.trackPipeline.run() }
         // Every Track gets its Lyrics searched, whatever the Track Pipeline is doing.
         container.appScope.launch { container.lyricsPipeline.run() }
+        // Files a job wrote after its Track was deleted (#20).
+        container.appScope.launch { container.trackStorage.removeOrphanedFiles() }
     }
 }

@@ -12,8 +12,36 @@ import app.croonvox.core.port.Stems
 import java.io.InputStream
 import java.security.MessageDigest
 
-/** [TrackFiles] with synthetic paths and in-memory content; records staging, commits and deletes. */
+/**
+ * [TrackFiles] with synthetic paths and in-memory content; records staging, commits and deletes.
+ * File sizes are only what [store] set.
+ */
 class InMemoryTrackFiles : TrackFiles {
+    private val sizes = mutableMapOf<String, Long>()
+
+    /** Pretends [file] exists with [bytes]. */
+    fun store(file: AudioFile, bytes: Long) {
+        sizes[file.path] = bytes
+    }
+
+    /** Pretends [directory] holds [bytes]. */
+    fun store(directory: AppDirectory, bytes: Long) {
+        sizes[directory.path + "/"] = bytes
+    }
+
+    override suspend fun sizeOf(file: AudioFile): Long = sizes[file.path] ?: 0
+
+    override suspend fun sizeOf(directory: AppDirectory): Long = sizes[directory.path + "/"] ?: 0
+
+    /** Stems removed through [deleteStems]. */
+    val deletedStems = mutableListOf<Pair<TrackId, SeparationModelId>>()
+
+    override suspend fun deleteStems(track: TrackId, model: SeparationModelId) {
+        val stems = stems(track, model)
+        sizes.keys.removeAll { it == stems.instrumental.path || it == stems.vocalStem.path || it == separationCheckpoint(track, model).path + "/" }
+        deletedStems += track to model
+    }
+
     private var nextStage = 0
     private val staged = mutableMapOf<AudioFile, ByteArray>()
     private val originals = mutableMapOf<TrackId, ByteArray>()
@@ -40,6 +68,7 @@ class InMemoryTrackFiles : TrackFiles {
     val deletedTakes = mutableListOf<AudioFile>()
 
     override suspend fun deleteTake(track: TrackId, take: TakeId) {
+        sizes.remove(take(track, take).path)
         deletedTakes += take(track, take)
     }
 
@@ -83,8 +112,14 @@ class InMemoryTrackFiles : TrackFiles {
         staged.clear()
     }
 
+    override suspend fun deleteAllExcept(keep: Set<TrackId>) {
+        val kept = keep.map { "/mem/${it.key}/" }
+        sizes.keys.removeAll { path -> path.startsWith("/mem/") && !path.startsWith("/mem/staging/") && kept.none(path::startsWith) }
+    }
+
     override suspend fun deleteAll(track: TrackId) {
         originals.remove(track)
+        sizes.keys.removeAll { it.startsWith("/mem/${track.key}/") }
         deleted += track
     }
 }

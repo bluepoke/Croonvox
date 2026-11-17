@@ -4,11 +4,19 @@ package app.croonvox.core.library
 import app.croonvox.core.model.Track
 import app.croonvox.core.model.TrackPipelineState
 import app.croonvox.core.port.SourceCandidate
+import app.croonvox.core.session.TakeRepository
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 
 /** The user's collection of Tracks. */
-class Library(private val tracks: TrackRepository) {
+class Library(private val tracks: TrackRepository, private val takes: TakeRepository) {
     fun tracks(): Flow<List<Track>> = tracks.observeAll()
+
+    /** The Library's Tracks with their Take counts, newest first, updated as they change. */
+    fun entries(): Flow<List<LibraryEntry>> =
+        combine(tracks.observeAll(), takes.observeCounts()) { all, counts ->
+            all.map { LibraryEntry(it, counts[it.id] ?: 0) }
+        }
 
     /**
      * Adds a Source search result as a new Track in the [TrackPipelineState.Added] state.
@@ -25,3 +33,6 @@ class Library(private val tracks: TrackRepository) {
         return tracks.addIfAbsent(track)
     }
 }
+
+/** One Track as the Library lists it: the Track (with its Track Pipeline state and last Session) and its Take count. */
+data class LibraryEntry(val track: Track, val takeCount: Int)

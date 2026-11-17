@@ -28,4 +28,11 @@ class FakePipelineJobs : PipelineJobs {
     override fun fetchLyrics(track: TrackId) {
         lyricsFetches += track
     }
+
+    /** Tracks whose jobs were cancelled, in order. */
+    val cancelled = mutableListOf<TrackId>()
+
+    override suspend fun cancelAll(track: TrackId) {
+        cancelled += track
+    }
 }

@@ -23,4 +23,7 @@ interface PipelineJobs {
      * Calling it again is harmless.
      */
     fun fetchLyrics(track: TrackId)
+
+    /** Cancels every job queued or running for [track] (it is being deleted) and waits until they have stopped. */
+    suspend fun cancelAll(track: TrackId)
 }

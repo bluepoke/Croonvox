@@ -40,6 +40,20 @@ class AppTrackFiles(private val root: File) : TrackFiles {
     override fun take(track: TrackId, take: TakeId): AudioFile =
         AudioFile(File(dirOf(track), "takes/${hash(take.value)}.flac").path)
 
+    override suspend fun deleteStems(track: TrackId, model: SeparationModelId) {
+        withContext(Dispatchers.IO) {
+            val stems = stems(track, model)
+            File(stems.instrumental.path).parentFile?.deleteRecursively()
+            File(separationCheckpoint(track, model).path).deleteRecursively()
+        }
+    }
+
+    override suspend fun sizeOf(file: AudioFile): Long = withContext(Dispatchers.IO) { File(file.path).length() }
+
+    override suspend fun sizeOf(directory: AppDirectory): Long = withContext(Dispatchers.IO) {
+        File(directory.path).walkBottomUp().filter { it.isFile }.sumOf { it.length() }
+    }
+
     override suspend fun deleteTake(track: TrackId, take: TakeId) {
         withContext(Dispatchers.IO) { File(take(track, take).path).delete() }
     }
@@ -88,6 +102,14 @@ class AppTrackFiles(private val root: File) : TrackFiles {
 
     override suspend fun deleteAll(track: TrackId) {
         withContext(Dispatchers.IO) { dirOf(track).deleteRecursively() }
+    }
+
+    override suspend fun deleteAllExcept(keep: Set<TrackId>) {
+        withContext(Dispatchers.IO) {
+            val kept = keep.mapTo(HashSet()) { dirOf(it).name }
+            // Hidden directories (staging) are not Tracks.
+            root.listFiles { f -> f.isDirectory && !f.name.startsWith(".") && f.name !in kept }?.forEach { it.deleteRecursively() }
+        }
     }
 
     private fun dirOf(track: TrackId): File = File(root, hash(track.key))

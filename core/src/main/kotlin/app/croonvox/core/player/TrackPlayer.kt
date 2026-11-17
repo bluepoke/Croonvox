@@ -24,12 +24,12 @@ class TrackPlayer(
 
     /**
      * Loads the Track's Instrumental (or Original Audio), paused at the start, and returns a handle to control it.
+     * Deleted stems are made again meanwhile (ADR 17).
      * [onProgress] receives 0..1 while the audio is prepared.
      * @throws NotPlayableYet if the Track Pipeline hasn't stored the Original Audio yet.
      */
     suspend fun open(id: TrackId, onProgress: (Float) -> Unit = {}): OpenTrack {
-        val track = checkNotNull(tracks.get(id)) { "no Track $id" }
-        if (!track.hasOriginalAudio) throw NotPlayableYet(track)
+        val track = tracks.getForOpening(id)
         val audio = when (val pipeline = track.pipeline) {
             is TrackPipelineState.Ready -> files.stems(id, pipeline.model).instrumental
             else -> files.originalAudio(id)
@@ -53,6 +53,18 @@ class OpenTrack internal constructor(
 
     /** Stops and releases this Track's audio; does nothing if another Track was opened since. */
     fun close() = engine.unload(load)
+}
+
+/**
+ * The Track being opened (Track detail or a Session), which needs its stems: if they were deleted,
+ * it goes back to Separating with the same model and the Track Pipeline queues the job (ADR 17).
+ * @throws NotPlayableYet if the Track Pipeline hasn't stored the Original Audio yet.
+ */
+internal suspend fun TrackRepository.getForOpening(id: TrackId): Track {
+    val track = checkNotNull(get(id)) { "no Track $id" }
+    if (!track.hasOriginalAudio) throw NotPlayableYet(track)
+    val deleted = track.pipeline as? TrackPipelineState.StemsDeleted ?: return track
+    return updatePipeline(id, TrackPipelineState.Separating(deleted.model))
 }
 
 /** The Track has no stored Original Audio yet (see [Track.hasOriginalAudio]). */

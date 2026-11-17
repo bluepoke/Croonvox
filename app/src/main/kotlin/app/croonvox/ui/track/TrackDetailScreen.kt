@@ -199,7 +199,8 @@ private fun PipelineStatus(pipeline: TrackPipelineState, onRetry: () -> Unit) {
             }
         }
         is TrackPipelineState.Ready -> Text("Playing the instrumental", style = MaterialTheme.typography.bodySmall, color = muted)
-        TrackPipelineState.Added, TrackPipelineState.Downloaded -> Text(pipeline.label(), style = MaterialTheme.typography.bodySmall, color = muted)
+        // Opening the Track brings deleted stems back, so this shows only for a moment (ADR 17).
+        TrackPipelineState.Added, TrackPipelineState.Downloaded, is TrackPipelineState.StemsDeleted -> Text(pipeline.label(), style = MaterialTheme.typography.bodySmall, color = muted)
     }
 }
 

@@ -10,12 +10,15 @@ data class Track(
     val artist: String?,
     val durationMs: Long?,
     val pipeline: TrackPipelineState,
+    /** When a Session on the Track was last opened (epoch ms); null if it was never sung. */
+    val lastSessionAt: Long? = null,
 ) {
     /** The Original Audio is stored, so the Track can be played and sung (ADR 10). */
     val hasOriginalAudio: Boolean
         get() = when (pipeline) {
             TrackPipelineState.Added, is TrackPipelineState.Downloading -> false
-            TrackPipelineState.Downloaded, is TrackPipelineState.Separating, is TrackPipelineState.Ready -> true
+            TrackPipelineState.Downloaded, is TrackPipelineState.Separating, is TrackPipelineState.Ready,
+            is TrackPipelineState.StemsDeleted -> true
             is TrackPipelineState.Failed -> pipeline.step != PipelineStep.Downloading
         }
 }
@@ -65,6 +68,12 @@ sealed interface TrackPipelineState {
 
     /** Separation with [model] has finished: its Instrumental and Vocal Stem are stored. */
     data class Ready(val model: SeparationModelId) : TrackPipelineState
+
+    /**
+     * The stems Separation with [model] produced were deleted to free space (ADR 17). Separation
+     * with [model] runs again when the Track is next opened; the Original Audio plays meanwhile.
+     */
+    data class StemsDeleted(val model: SeparationModelId) : TrackPipelineState
 
     /** [step] stopped for a [reason] that retrying alone won't fix; the user can retry. */
     data class Failed(val step: PipelineStep, val reason: String) : TrackPipelineState

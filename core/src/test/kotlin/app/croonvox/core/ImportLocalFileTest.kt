@@ -9,6 +9,7 @@ import app.croonvox.core.model.TrackId
 import app.croonvox.core.model.TrackPipelineState
 import app.croonvox.core.testing.FakeLocalFile
 import app.croonvox.core.testing.InMemoryTrackFiles
+import app.croonvox.core.testing.InMemoryTakeRepository
 import app.croonvox.core.testing.InMemoryTrackRepository
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -20,7 +21,7 @@ class ImportLocalFileTest {
     private val tracks = InMemoryTrackRepository()
     private val files = InMemoryTrackFiles()
     private val import = ImportLocalFile(tracks, files)
-    private val library = Library(tracks)
+    private val library = Library(tracks, InMemoryTakeRepository())
 
     @Test
     fun `importing a file adds a Downloaded Track from the Local File Source named after the file`() = runTest {

@@ -39,6 +39,13 @@ internal abstract class TrackDao {
         return checkNotNull(get(source, sourceTrackId))
     }
 
+    @Query("UPDATE tracks SET last_session_at = :at WHERE source = :source AND source_track_id = :sourceTrackId")
+    abstract suspend fun setLastSessionAt(source: String, sourceTrackId: String, at: Long)
+
+    /** Deletes the row; Takes, Lyrics and Lyrics Offsets go with it (foreign keys cascade). */
+    @Query("DELETE FROM tracks WHERE source = :source AND source_track_id = :sourceTrackId")
+    abstract suspend fun delete(source: String, sourceTrackId: String)
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     protected abstract suspend fun insertOrIgnore(track: TrackEntity): Long
 

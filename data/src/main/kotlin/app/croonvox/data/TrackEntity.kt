@@ -25,6 +25,8 @@ internal data class TrackEntity(
     @ColumnInfo(name = "pipeline_progress") val pipelineProgress: String? = null,
     /** Why the Track is Failed (version 3, #7), or why a download waits to retry (#6). */
     @ColumnInfo(name = "pipeline_failure") val pipelineFailure: String? = null,
+    /** When a Session was last opened on the Track (version 8, #20). */
+    @ColumnInfo(name = "last_session_at") val lastSessionAt: Long? = null,
 )
 
 internal fun Track.toEntity(addedAt: Long): TrackEntity {
@@ -39,6 +41,7 @@ internal fun Track.toEntity(addedAt: Long): TrackEntity {
         addedAt = addedAt,
         pipelineProgress = pipelineColumns.progress,
         pipelineFailure = pipelineColumns.failure,
+        lastSessionAt = lastSessionAt,
     )
 }
 
@@ -48,6 +51,7 @@ internal fun TrackEntity.toTrack() = Track(
     artist = artist,
     durationMs = durationMs,
     pipeline = PipelineColumns(pipelineState, pipelineProgress, pipelineFailure).toState(),
+    lastSessionAt = lastSessionAt,
 )
 
 /** The pipeline columns of a row. Stored as stable strings so enum/class renames don't corrupt data. */
@@ -61,6 +65,7 @@ internal fun TrackPipelineState.toColumns(): PipelineColumns = when (this) {
     TrackPipelineState.Downloaded -> PipelineColumns("downloaded")
     is TrackPipelineState.Separating -> PipelineColumns("$SEPARATING_PREFIX${model.value}", progress = progress?.toColumn())
     is TrackPipelineState.Ready -> PipelineColumns("$READY_PREFIX${model.value}")
+    is TrackPipelineState.StemsDeleted -> PipelineColumns("$STEMS_DELETED_PREFIX${model.value}")
     is TrackPipelineState.Failed -> PipelineColumns("$FAILED_PREFIX${step.toColumn()}", failure = reason)
 }
 
@@ -78,6 +83,8 @@ private fun PipelineColumns.toState(): TrackPipelineState = when {
     state.startsWith(SEPARATING_PREFIX) ->
         TrackPipelineState.Separating(SeparationModelId(state.removePrefix(SEPARATING_PREFIX)), progress?.let(::progressFromColumn))
     state.startsWith(READY_PREFIX) -> TrackPipelineState.Ready(SeparationModelId(state.removePrefix(READY_PREFIX)))
+    state.startsWith(STEMS_DELETED_PREFIX) ->
+        TrackPipelineState.StemsDeleted(SeparationModelId(state.removePrefix(STEMS_DELETED_PREFIX)))
     state.startsWith(FAILED_PREFIX) ->
         TrackPipelineState.Failed(stepFromColumn(state.removePrefix(FAILED_PREFIX)), failure.orEmpty())
     else -> error("unknown pipeline state '$state'")
@@ -113,3 +120,4 @@ private fun stepFromColumn(value: String): PipelineStep = when (value) {
 private const val SEPARATING_PREFIX = "separating:"
 private const val READY_PREFIX = "ready:"
 private const val FAILED_PREFIX = "failed:"
+private const val STEMS_DELETED_PREFIX = "stems_deleted:"

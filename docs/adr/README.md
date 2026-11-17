@@ -16,3 +16,4 @@
 - [14. Vocal-Free Tracks skip Separation](0014-vocal-free-tracks-skip-separation.md)
 - [15. Separation Model catalogue after the separation spike](0015-separation-model-catalogue-after-spike.md)
 - [16. The Session plays through the normal output path unless Monitoring is on](0016-session-output-normal-path-unless-monitoring.md)
+- [17. Deleted stems come back when the Track is next opened](0017-deleted-stems-come-back-when-opened.md)

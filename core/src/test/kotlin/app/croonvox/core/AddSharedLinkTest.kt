@@ -6,6 +6,7 @@ import app.croonvox.core.library.Library
 import app.croonvox.core.model.SourceId
 import app.croonvox.core.model.TrackPipelineState
 import app.croonvox.core.testing.FakeSource
+import app.croonvox.core.testing.InMemoryTakeRepository
 import app.croonvox.core.testing.InMemoryTrackRepository
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -15,7 +16,7 @@ import kotlin.test.assertNull
 
 class AddSharedLinkTest {
     private val tracks = InMemoryTrackRepository()
-    private val library = Library(tracks)
+    private val library = Library(tracks, InMemoryTakeRepository())
     private val youtube = FakeSource(SourceId("youtube"))
     private val soundcloud = FakeSource(SourceId("soundcloud"))
     private val addLink = AddSharedLink(listOf(youtube, soundcloud), library)

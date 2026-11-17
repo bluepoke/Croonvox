@@ -31,6 +31,7 @@ class TrackEntityTest {
             TrackPipelineState.Separating(model, SeparationProgress(SeparationProgress.Stage.InstallingModel, 0.75f)),
             TrackPipelineState.Separating(model, SeparationProgress(SeparationProgress.Stage.Separating, 0.5f)),
             TrackPipelineState.Ready(model),
+            TrackPipelineState.StemsDeleted(model),
             TrackPipelineState.Failed(PipelineStep.Separating, "no decoder for audio/x-weird"),
             TrackPipelineState.Failed(PipelineStep.Downloading, "HTTP 404"),
         )

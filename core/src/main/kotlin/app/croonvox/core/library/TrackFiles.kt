@@ -23,6 +23,18 @@ interface TrackFiles {
     /** Location for a kept Take's audio (mono FLAC, ADR 8). */
     fun take(track: TrackId, take: TakeId): AudioFile
 
+    /**
+     * Deletes the Instrumental and Vocal Stem of [model], and any Separation checkpoint for it.
+     * They can be made again from the Original Audio (ADR 8, ADR 17).
+     */
+    suspend fun deleteStems(track: TrackId, model: SeparationModelId)
+
+    /** Bytes [file] takes up; 0 if it doesn't exist. */
+    suspend fun sizeOf(file: AudioFile): Long
+
+    /** Bytes everything in [directory] takes up; 0 if it doesn't exist. */
+    suspend fun sizeOf(directory: AppDirectory): Long
+
     /** Deletes a Take's audio file, if it exists. */
     suspend fun deleteTake(track: TrackId, take: TakeId)
 
@@ -55,6 +67,9 @@ interface TrackFiles {
 
     /** Removes every file the Track owns. */
     suspend fun deleteAll(track: TrackId)
+
+    /** Removes the files of every Track not in [keep]. */
+    suspend fun deleteAllExcept(keep: Set<TrackId>)
 }
 
 /** A copied file awaiting commit, with the lowercase hex SHA-256 of its content. */
