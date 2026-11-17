@@ -22,6 +22,17 @@ Prerequisites: a Track imported from a local file, wired headphones, and a way t
 10. **Route change.** Unplug the headphones while recording: the app doesn't crash, the recording ends and Review shows the part recorded so far. Playback and recording work again on the new route.
 11. **Leaving the Session.** Press Back during playback: audio stops. The Track detail screen plays again with its normal controls.
 
+## Transpose (#10)
+
+Prerequisites: a Ready Track with a sustained note or a clear melody, wired headphones, and the loopback set-up from #8. Watch `adb logcat -s CroonvoxEngine` for the `Transpose: stretcher` line and xruns.
+
+1. **Live change.** Play from 1:00 and step Transpose from 0 to +6 and down to −6 with − / +. Each step is heard at once, the position keeps running, the tempo stays the same, and there are no clicks, dropouts or restarts. Going from 0 to ±1 and back fades over smoothly.
+2. **Seek while transposed.** At +3, seek to 2:00 while playing. Playback continues at +3 from 2:00, without a burst of the original key.
+3. **Bound to the Take.** At −2, record 10 s. While recording, press + twice: the backing stays at −2 and a note says the new setting applies to the next Take. In Review, the Take plays at −2 and Review shows "Transpose −2". Keep it: the list shows "−2". With the control at 0, play the kept Take: the backing plays at −2.
+4. **Alignment when transposed (loopback).** At +4, record a loopback Take over a passage with clear transients. In Review the recorded copy sits on the played audio as closely as at Transpose 0 (#8 item 6): the stretcher adds no offset.
+5. **CPU.** At +6, record a 3-minute Take while using the phone. No audible glitches; the xrun correction from #8 item 7 stays small. Then start and stop playback and recording at +6 ten times, and seek a few times: no click or dropout at the start (the stretcher is primed in the first callback).
+6. **Leaving the Session.** Set +3, press Back: Track detail plays in the original key. Open the Session again: Transpose is 0.
+
 ## Separation in the Track Pipeline (#7)
 
 Prerequisites: network for the first run (the Fast model, 75 MB, is downloaded once), a 4-minute and a 9-minute song imported from local files, one of them at 48 kHz (e.g. the audio of a YouTube download). Watch `adb logcat -s WM-WorkerWrapper CroonvoxFlac` for errors.

@@ -11,6 +11,7 @@ import app.croonvox.core.model.SourceId
 import app.croonvox.core.model.Take
 import app.croonvox.core.model.TakeId
 import app.croonvox.core.model.TrackId
+import app.croonvox.core.model.Transpose
 
 /** Row of the `takes` table. A Take belongs to one Track and goes when the Track goes. */
 @Entity(
@@ -35,6 +36,8 @@ internal data class TakeEntity(
     @ColumnInfo(name = "sample_rate") val sampleRate: Int,
     @ColumnInfo(name = "output_route") val outputRoute: String,
     @ColumnInfo(name = "reported_latency_frames") val reportedLatencyFrames: Long,
+    // Takes from before Transpose (#10) were all sung untransposed.
+    @ColumnInfo(name = "transpose", defaultValue = "0") val transpose: Int,
     @ColumnInfo(name = "recorded_at") val recordedAt: Long,
 )
 
@@ -48,6 +51,7 @@ internal fun Take.toEntity() = TakeEntity(
     sampleRate = sampleRate,
     outputRoute = route.toColumn(),
     reportedLatencyFrames = reportedLatencyFrames,
+    transpose = transpose.semitones,
     recordedAt = recordedAt,
 )
 
@@ -60,6 +64,7 @@ internal fun TakeEntity.toTake() = Take(
     sampleRate = sampleRate,
     route = outputRouteFromColumn(outputRoute),
     reportedLatencyFrames = reportedLatencyFrames,
+    transpose = Transpose.clamped(transpose),
     recordedAt = recordedAt,
 )
 

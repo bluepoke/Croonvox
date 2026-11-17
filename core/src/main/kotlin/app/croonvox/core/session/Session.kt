@@ -9,6 +9,7 @@ import app.croonvox.core.model.Take
 import app.croonvox.core.model.TakeId
 import app.croonvox.core.model.Track
 import app.croonvox.core.model.TrackPipelineState
+import app.croonvox.core.model.Transpose
 import app.croonvox.core.port.AudioEngine
 import app.croonvox.core.port.CapturedTake
 import app.croonvox.core.port.InputLevel
@@ -106,6 +107,22 @@ class Session private constructor(
         if (_state.value == SessionState.Idle) engine.seekTo(positionMs)
     }
 
+    // --- Transpose (ADR 5) ---
+
+    private val _transpose = MutableStateFlow(Transpose.None)
+
+    /** The Transpose control: what free playback plays at and the next Take is recorded at. */
+    val transpose: StateFlow<Transpose> = _transpose
+
+    /**
+     * Sets the Transpose control; free playback follows at once. A Take being recorded or played
+     * back keeps its own Transpose, and existing Takes never change (ADR 5).
+     */
+    fun setTranspose(transpose: Transpose) {
+        _transpose.value = transpose
+        engine.setTranspose(transpose)
+    }
+
     // --- Microphone ---
 
     /**
@@ -171,10 +188,10 @@ class Session private constructor(
         }
     }
 
-    /** Plays the Take in Review against the Backing Audio again, from its Start Position. */
+    /** Plays the Take in Review against the Backing Audio again, at its Transpose, from its Start Position. */
     suspend fun replay() = mutex.withLock {
         val review = _state.value as? SessionState.Review ?: return@withLock
-        engine.playTake(review.take.reportedLatencyFrames)
+        engine.playTake(review.take.reportedLatencyFrames, review.transpose)
     }
 
     /**
@@ -196,6 +213,7 @@ class Session private constructor(
             sampleRate = captured.sampleRate,
             route = captured.route,
             reportedLatencyFrames = captured.reportedLatencyFrames,
+            transpose = review.transpose,
             recordedAt = deps.clock(),
         )
         deps.takes.add(take)
@@ -224,7 +242,7 @@ class Session private constructor(
     // --- Kept Takes ---
 
     /**
-     * Plays a kept Take against the Backing Audio from its Start Position (only while
+     * Plays a kept Take against the Backing Audio at the Take's Transpose, from its Start Position (only while
      * [SessionState.Idle]). Returns false if its audio can't be played.
      */
     suspend fun play(take: TakeId): Boolean = mutex.withLock {
@@ -234,7 +252,7 @@ class Session private constructor(
         if (!engine.loadTake(deps.files.take(track.id, stored.id), stored.startFrame)) return@withLock false
         // Until Latency Calibration (#9), alignment uses the engine's estimate from recording.
         _state.value = SessionState.PlayingTake(stored)
-        if (!engine.playTake(stored.reportedLatencyFrames)) {
+        if (!engine.playTake(stored.reportedLatencyFrames, stored.transpose)) {
             becomeIdleLocked()
             return@withLock false
         }
@@ -301,22 +319,25 @@ class Session private constructor(
         }
     }
 
+    /** Starts recording a Take at the Transpose the control is set to now. */
     private suspend fun startRecordingLocked(fromMs: Long) {
-        if (!engine.startRecording(fromMs)) {
+        val transpose = _transpose.value
+        if (!engine.startRecording(fromMs, transpose)) {
             becomeIdleLocked()
             throw MicrophoneUnavailable()
         }
-        _state.value = SessionState.Recording(fromMs)
+        _state.value = SessionState.Recording(fromMs, transpose)
     }
 
     private suspend fun finishRecordingLocked() {
+        val recording = _state.value as SessionState.Recording
         val take = engine.stopRecording()
         if (take == null) {
             becomeIdleLocked()
             return
         }
-        _state.value = SessionState.Review(take)
-        engine.playTake(take.reportedLatencyFrames)
+        _state.value = SessionState.Review(take, recording.transpose)
+        engine.playTake(take.reportedLatencyFrames, recording.transpose)
     }
 
     private suspend fun leaveReviewLocked(take: CapturedTake) {
@@ -355,6 +376,7 @@ class Session private constructor(
         _reviewBackingDb.value = deps.settings.reviewBackingDb() ?: DEFAULT_REVIEW_BACKING_DB
         engine.setReviewBackingGain(_reviewBackingDb.value)
         engine.beginSession()
+        engine.setTranspose(_transpose.value)
         loadBacking(backingFor(track))
         observe()
     }
@@ -450,11 +472,14 @@ sealed interface SessionState {
     /** Recording from [startPositionMs] starts in [secondsLeft] seconds. */
     data class CountingDown(val startPositionMs: Long, val secondsLeft: Int) : SessionState
 
-    /** A Take is being recorded from [startPositionMs]. */
-    data class Recording(val startPositionMs: Long) : SessionState
+    /** A Take is being recorded from [startPositionMs], sung at [transpose]. */
+    data class Recording(val startPositionMs: Long, val transpose: Transpose) : SessionState
 
-    /** A just-recorded [take], not kept yet: Keep, Discard or Record again (GLOSSARY: Review). */
-    data class Review(val take: CapturedTake) : SessionState
+    /**
+     * A just-recorded [take], sung at [transpose], not kept yet: Keep, Discard or Record again
+     * (GLOSSARY: Review).
+     */
+    data class Review(val take: CapturedTake, val transpose: Transpose) : SessionState
 
     /** A kept [take] plays against the Backing Audio. */
     data class PlayingTake(val take: Take) : SessionState

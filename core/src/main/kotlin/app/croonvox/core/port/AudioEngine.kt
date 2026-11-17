@@ -4,12 +4,14 @@ package app.croonvox.core.port
 import app.croonvox.core.model.AudioFile
 import app.croonvox.core.model.InputDevice
 import app.croonvox.core.model.OutputRoute
+import app.croonvox.core.model.Transpose
 import kotlinx.coroutines.flow.StateFlow
 
 /**
  * The native Audio Engine as the domain sees it (ADR 4, ADR 13). It plays one loaded Backing
  * Audio file. In a Session it also records the microphone on the same timeline and plays a Take
- * back against the Backing Audio. Transpose and Monitoring are added by later slices.
+ * back against the Backing Audio, each at its own Transpose (ADR 5). Monitoring is added by a
+ * later slice.
  */
 interface AudioEngine {
     val playback: StateFlow<Playback>
@@ -34,6 +36,12 @@ interface AudioEngine {
 
     fun seekTo(positionMs: Long)
 
+    /**
+     * Transpose of plain playback of the Backing Audio, tempo unchanged (ADR 5). Applies at once
+     * while playing, without restarting. Recording and Take playback keep their own Transpose.
+     */
+    fun setTranspose(transpose: Transpose)
+
     // --- Session face (ADR 4, ADR 9) ---
 
     /**
@@ -42,7 +50,7 @@ interface AudioEngine {
      */
     fun beginSession()
 
-    /** Returns to plain playback, closing the microphone and dropping any Take audio. */
+    /** Returns to plain, untransposed playback, closing the microphone and dropping any Take audio. */
     fun endSession()
 
     /** Microphone level and device while it is open (see [enableMicrophone]). */
@@ -58,12 +66,13 @@ interface AudioEngine {
     fun setInputGain(gainDb: Float)
 
     /**
-     * Plays the Backing Audio from [fromMs] and records the microphone on the same timeline,
-     * until [stopRecording] or the end of the Backing Audio. Replaces any Take audio held.
+     * Plays the Backing Audio from [fromMs] at [transpose] and records the microphone on the same
+     * timeline, until [stopRecording] or the end of the Backing Audio. [setTranspose] doesn't
+     * change the Transpose of a running recording. Replaces any Take audio held.
      * Returns once [playback] shows the recording, or false if it can't start (no microphone,
      * nothing loaded).
      */
-    suspend fun startRecording(fromMs: Long): Boolean
+    suspend fun startRecording(fromMs: Long, transpose: Transpose): Boolean
 
     /**
      * Stops a recording that is still running and returns what was captured, or null if
@@ -82,11 +91,12 @@ interface AudioEngine {
     suspend fun loadTake(file: AudioFile, startFrame: Long): Boolean
 
     /**
-     * Plays the held Take audio together with the Backing Audio, from the Take's Start Position
-     * until the Take ends. Take sample i sounds at timeline position start + i − [alignmentFrames].
+     * Plays the held Take audio together with the Backing Audio at the Take's [transpose], from the
+     * Take's Start Position until the Take ends. [setTranspose] doesn't change it meanwhile.
+     * Take sample i sounds at timeline position start + i − [alignmentFrames].
      * Returns once [playback] shows it playing, or false if no Take audio is held.
      */
-    suspend fun playTake(alignmentFrames: Long): Boolean
+    suspend fun playTake(alignmentFrames: Long, transpose: Transpose): Boolean
 
     /**
      * Gain of the Backing Audio, in dB, while the held Take audio plays ([playTake]), so the

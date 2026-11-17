@@ -13,6 +13,12 @@
 // is appended in fixed-size blocks that are never reallocated; the callback reads up to the
 // published decoded frame count. Playing past it outputs silence until more is decoded.
 //
+// Transpose (ADR 5): in a Session the Backing Audio goes through Signalsmith Stretch, bypassed
+// at 0 semitones. The stretcher reads ahead of the position by its own latency and is primed
+// with outputSeek, so its output stays sample-aligned with the timeline: Takes need no extra
+// alignment. Plain playback follows setTranspose live; a recording and Take playback keep the
+// Transpose they were started with. Switching to or from 0 crossfades over one callback.
+//
 // Threading: public methods may be called from any non-audio thread; mutating ones are
 // serialised by mControlMutex. Blocks are freed only while the stream is closed. The Take
 // buffer is changed only while the transport is idle and the callback has acknowledged it
@@ -28,6 +34,8 @@
 #include <mutex>
 #include <string>
 #include <vector>
+
+#include "signalsmith-stretch/signalsmith-stretch.h"
 
 namespace croonvox {
 
@@ -58,6 +66,8 @@ public:
     bool play();
     void pause();
     void seekTo(int64_t frame);
+    // Transpose of plain playback in semitones (−6…+6), applied live; reset when the Session ends.
+    void setTranspose(int semitones);
 
     // --- Session mode ---
     // Entering opens low-latency streams that keep running; leaving closes the microphone and
@@ -68,12 +78,12 @@ public:
     void setInputGain(float linear);
     // Backing Audio gain while the held Take plays (Review balance); recording is unaffected.
     void setReviewBackingGain(float linear);
-    // Plays from [fromFrame] and records the microphone into a new Take. False without input.
-    bool startRecording(int64_t fromFrame);
+    // Plays from [fromFrame] at [transpose] and records the microphone into a new Take. False without input.
+    bool startRecording(int64_t fromFrame, int transpose);
     // Stops recording (if running); the captured Take stays held.
     void stopRecording();
-    // Plays the held Take with the Backing Audio from the Take's start until the Take ends.
-    bool playTake(int64_t alignmentFrames);
+    // Plays the held Take with the Backing Audio at [transpose], from the Take's start until the Take ends.
+    bool playTake(int64_t alignmentFrames, int transpose);
     void clearTake();
     // Replaces the held Take with stored audio (mono, at the timeline rate).
     bool beginTakeLoad(int64_t startFrame, int sampleRate, int64_t estimatedFrames);
@@ -109,18 +119,26 @@ private:
     static constexpr int kDrainCallbacks = 10;        // empty the input after a (re)start
     static constexpr int kXRunMeasureCallbacks = 16;  // measure input backlog after an xrun
     static constexpr int kLostInputCallbacks = 50;    // a deficit this old (~200 ms) was lost, not late
+    static constexpr int kStretchChunk = 1024;        // frames per stretcher call within a callback
 
     bool startStreamLocked();
     bool openSessionStreamsLocked();
     void closeStreamLocked();
     void freeBlocksLocked();
     void enterIdleLocked();
-    bool startTransportLocked(int64_t fromFrame, Transport transport);
+    bool startTransportLocked(int64_t fromFrame, Transport transport, int transpose);
+    void configureStretchLocked(int32_t sampleRate);
     int64_t reportedLatencyFramesLocked();
 
     int readInput(int numFrames);
     void trackXRuns();
     void mixBacking(int64_t pos, int64_t decoded, float *out, int32_t numFrames, int32_t &written);
+    int32_t renderBacking(int64_t pos, int64_t decoded, bool complete, bool seeked, int transpose, float *out,
+                          int32_t numFrames);
+    void readPlanar(int64_t from, int64_t decoded, int32_t frames, float *left, float *right) const;
+    void setStretchTranspose(int semitones);
+    void primeStretch(int64_t pos, int64_t decoded, int transpose);
+    void mixStretched(int64_t pos, int64_t decoded, float *out, int32_t numFrames, bool fadeIn, bool fadeOut);
 
     std::mutex mControlMutex;
     std::shared_ptr<oboe::AudioStream> mStream;
@@ -139,6 +157,18 @@ private:
     std::atomic<bool> mIdleAck{false};
     std::atomic<int64_t> mPosition{0};
     std::atomic<int64_t> mSeekRequest{-1};
+
+    // Transpose (ADR 5). The stretcher and the fields below it are used by the callback only,
+    // except for configureStretchLocked() while the stream is closed.
+    std::atomic<int32_t> mPlayTranspose{0};       // plain playback, follows setTranspose()
+    std::atomic<int32_t> mTransportTranspose{0};  // recording and Take playback, fixed at their start
+    signalsmith::stretch::SignalsmithStretch<float> mStretch;
+    int32_t mStretchRate = 0;
+    int32_t mStretchLead = 0;    // input read ahead of the position, so output lines up with it
+    std::vector<float> mStretchIn;   // planar L | R, sized for priming and one chunk
+    std::vector<float> mStretchOut;  // planar L | R, one chunk
+    int mAppliedTranspose = 0;   // what the Backing Audio is played at; 0 = stretcher bypassed
+    bool mStretchCut = false;    // the next stretched output starts fresh, without a crossfade
 
     // Session mode.
     bool mSession = false;

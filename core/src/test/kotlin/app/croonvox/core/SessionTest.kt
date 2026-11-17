@@ -8,6 +8,7 @@ import app.croonvox.core.model.SourceId
 import app.croonvox.core.model.Track
 import app.croonvox.core.model.TrackId
 import app.croonvox.core.model.TrackPipelineState
+import app.croonvox.core.model.Transpose
 import app.croonvox.core.player.NotPlayableYet
 import app.croonvox.core.session.BackingAudio
 import app.croonvox.core.session.Session
@@ -168,7 +169,7 @@ class SessionTest {
 
         session.recordAgain()
 
-        assertEquals(SessionState.Recording(42_000), session.state.value)
+        assertEquals(SessionState.Recording(42_000, Transpose.None), session.state.value)
         engine.advance(3_000)
         session.stop()
         val review = assertIs<SessionState.Review>(session.state.value)
@@ -219,7 +220,7 @@ class SessionTest {
         advanceTimeBy(2_000)
         runCurrent()
 
-        assertEquals(SessionState.Recording(10_000), session.state.value)
+        assertEquals(SessionState.Recording(10_000, Transpose.None), session.state.value)
         assertTrue(engine.playback.value.recording)
     }
 
@@ -314,7 +315,7 @@ class SessionTest {
 
         assertEquals(BackingAudio.Instrumental(MODEL), session.backing.value)
         assertEquals(instrumental, engine.playback.value.loaded)
-        assertEquals(SessionState.Recording(15_000), session.state.value)
+        assertEquals(SessionState.Recording(15_000, Transpose.None), session.state.value)
         assertEquals(15_000, engine.playback.value.positionMs)
     }
 
@@ -378,6 +379,103 @@ class SessionTest {
         engine.advance(3_000)
         runCurrent()
         assertEquals(SessionState.Idle, session.state.value)
+    }
+
+    @Test
+    fun `changing the Transpose during free playback is heard at once, without restarting`() = runTest {
+        val session = openDownloaded()
+        assertEquals(Transpose.None, session.transpose.value)
+        session.seekTo(20_000)
+        session.play()
+        engine.advance(1_000)
+
+        session.setTranspose(Transpose(-3))
+
+        assertEquals(Transpose(-3), session.transpose.value)
+        assertEquals(Transpose(-3), engine.audibleTranspose)
+        assertTrue(engine.playback.value.playing)
+        assertEquals(21_000, engine.playback.value.positionMs)
+    }
+
+    @Test
+    fun `a Take is sung at the Transpose set when recording starts and is kept with it`() = runTest {
+        val session = openDownloaded()
+        session.setTranspose(Transpose(2))
+        session.record()
+        engine.advance(1_000)
+
+        session.setTranspose(Transpose(5))
+
+        assertEquals(Transpose(2), engine.audibleTranspose)
+        engine.advance(1_000)
+        session.stop()
+        assertEquals(Transpose(2), assertIs<SessionState.Review>(session.state.value).transpose)
+        val kept = session.keep()
+        assertEquals(Transpose(2), kept.transpose)
+        assertEquals(listOf(Transpose(2)), session.takes.first().map { it.transpose })
+        // The control keeps its new value for the next Take.
+        assertEquals(Transpose(5), session.transpose.value)
+    }
+
+    @Test
+    fun `Review plays the Backing Audio at the Take's Transpose, whatever the control is set to`() = runTest {
+        val session = openDownloaded()
+        session.setTranspose(Transpose(-4))
+        recordTake(session, fromMs = 5_000, lengthMs = 3_000)
+        assertEquals(Transpose(-4), engine.audibleTranspose)
+
+        session.setTranspose(Transpose(1))
+        assertEquals(Transpose(-4), engine.audibleTranspose)
+        engine.advance(3_000)
+        runCurrent()
+        session.replay()
+
+        assertTrue(engine.playback.value.playingTake)
+        assertEquals(Transpose(-4), engine.audibleTranspose)
+        session.discard()
+        session.play()
+        assertEquals(Transpose(1), engine.audibleTranspose)
+    }
+
+    @Test
+    fun `a kept Take plays back at its own Transpose and keeps it when the control changes`() = runTest {
+        val session = openDownloaded()
+        session.setTranspose(Transpose(3))
+        recordTake(session, fromMs = 0, lengthMs = 2_000)
+        val take = session.keep()
+        session.setTranspose(Transpose(-6))
+
+        session.play(take.id)
+
+        assertEquals(Transpose(-6), session.transpose.value)
+        assertEquals(Transpose(3), engine.audibleTranspose)
+        assertEquals(listOf(Transpose(3)), session.takes.first().map { it.transpose })
+    }
+
+    @Test
+    fun `leaving a Session drops its Transpose, so the next one starts untransposed`() = runTest {
+        val first = openDownloaded()
+        first.setTranspose(Transpose(4))
+        first.close()
+        assertEquals(Transpose.None, engine.audibleTranspose)
+
+        val second = sessions.open(trackId, backgroundScope)
+        second.play()
+
+        assertEquals(Transpose.None, second.transpose.value)
+        assertEquals(Transpose.None, engine.audibleTranspose)
+    }
+
+    @Test
+    fun `record again sings the new Take at the Transpose the control is set to now`() = runTest {
+        val session = openDownloaded()
+        recordTake(session, fromMs = 15_000, lengthMs = 5_000)
+        session.setTranspose(Transpose(-2))
+
+        session.recordAgain()
+
+        assertEquals(SessionState.Recording(15_000, Transpose(-2)), session.state.value)
+        assertEquals(Transpose(-2), engine.audibleTranspose)
     }
 
     private suspend fun recordTake(session: Session, fromMs: Long, lengthMs: Long) {

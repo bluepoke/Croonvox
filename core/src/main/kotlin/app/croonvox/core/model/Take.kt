@@ -2,8 +2,8 @@
 package app.croonvox.core.model
 
 /**
- * One microphone recording of the user singing over a Track (GLOSSARY: Take). Its audio and
- * timing never change after recording (ADR 7); only its [name] can. Positions are frames on the Session timeline at
+ * One microphone recording of the user singing over a Track (GLOSSARY: Take). Its audio, timing
+ * and [transpose] never change after recording (ADR 5, ADR 7); only its [name] can. Positions are frames on the Session timeline at
  * [sampleRate]; the audio is stored as mono FLAC at that rate (ADR 8).
  */
 data class Take(
@@ -18,6 +18,8 @@ data class Take(
     val route: OutputRoute,
     /** The engine's round-trip estimate at recording, used for alignment until calibrated. */
     val reportedLatencyFrames: Long,
+    /** The Transpose it was sung at; its Backing Audio always plays at it (ADR 5). */
+    val transpose: Transpose,
     /** Epoch milliseconds. */
     val recordedAt: Long,
 ) {

@@ -8,6 +8,7 @@ import android.util.Log
 import app.croonvox.core.model.AudioFile
 import app.croonvox.core.model.InputDevice
 import app.croonvox.core.model.OutputRoute
+import app.croonvox.core.model.Transpose
 import app.croonvox.core.port.AudioEngine
 import app.croonvox.core.port.CapturedTake
 import app.croonvox.core.port.InputLevel
@@ -200,6 +201,10 @@ class OboeAudioEngine(context: Context) : AudioEngine {
         }
     }
 
+    override fun setTranspose(transpose: Transpose) {
+        scope.launch { NativePlayback.setTranspose(handle, transpose.semitones) }
+    }
+
     // --- Session face ---
 
     override fun beginSession() {
@@ -237,10 +242,10 @@ class OboeAudioEngine(context: Context) : AudioEngine {
         scope.launch { NativePlayback.setReviewBackingGain(handle, linear) }
     }
 
-    override suspend fun startRecording(fromMs: Long): Boolean = withContext(control) {
+    override suspend fun startRecording(fromMs: Long, transpose: Transpose): Boolean = withContext(control) {
         val rate = NativePlayback.sampleRate(handle)
         if (rate <= 0) return@withContext false
-        val started = NativePlayback.startRecording(handle, fromMs * rate / 1000)
+        val started = NativePlayback.startRecording(handle, fromMs * rate / 1000, transpose.semitones)
         captureRoute = if (started) routes.output(NativePlayback.outputDeviceId(handle)) else null
         if (started) startTicker()
         publish()
@@ -309,8 +314,8 @@ class OboeAudioEngine(context: Context) : AudioEngine {
         }
     }
 
-    override suspend fun playTake(alignmentFrames: Long): Boolean = withContext(control) {
-        val started = NativePlayback.playTake(handle, alignmentFrames)
+    override suspend fun playTake(alignmentFrames: Long, transpose: Transpose): Boolean = withContext(control) {
+        val started = NativePlayback.playTake(handle, alignmentFrames, transpose.semitones)
         if (started) startTicker()
         publish()
         started

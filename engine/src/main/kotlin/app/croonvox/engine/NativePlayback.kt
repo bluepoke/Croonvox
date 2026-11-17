@@ -23,6 +23,8 @@ internal object NativePlayback {
     external fun play(handle: Long): Boolean
     external fun pause(handle: Long)
     external fun seekTo(handle: Long, frame: Long)
+    /** Transpose of plain playback in semitones, applied live (ADR 5). */
+    external fun setTranspose(handle: Long, semitones: Int)
     external fun transport(handle: Long): Int
     external fun isPlaying(handle: Long): Boolean
     external fun positionFrames(handle: Long): Long
@@ -40,13 +42,13 @@ internal object NativePlayback {
     external fun clipCount(handle: Long): Long
     external fun outputDeviceId(handle: Long): Int
     external fun inputDeviceId(handle: Long): Int
-    external fun startRecording(handle: Long, fromFrame: Long): Boolean
+    external fun startRecording(handle: Long, fromFrame: Long, transpose: Int): Boolean
     external fun stopRecording(handle: Long)
     external fun takeStartFrame(handle: Long): Long
     external fun takeFrames(handle: Long): Long
     external fun takeReportedLatencyFrames(handle: Long): Long
     external fun takeXRunCorrectionFrames(handle: Long): Long
-    external fun playTake(handle: Long, alignmentFrames: Long): Boolean
+    external fun playTake(handle: Long, alignmentFrames: Long, transpose: Int): Boolean
     external fun clearTake(handle: Long)
     external fun beginTakeLoad(handle: Long, startFrame: Long, sampleRate: Int, estimatedFrames: Long): Boolean
     external fun appendTakeLoad(handle: Long, interleaved: FloatArray, frames: Int, channels: Int)

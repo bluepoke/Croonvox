@@ -55,6 +55,8 @@ JNI_FN(void, pause)(JNIEnv *, jobject, jlong h) { engine(h).pause(); }
 
 JNI_FN(void, seekTo)(JNIEnv *, jobject, jlong h, jlong frame) { engine(h).seekTo(frame); }
 
+JNI_FN(void, setTranspose)(JNIEnv *, jobject, jlong h, jint semitones) { engine(h).setTranspose(semitones); }
+
 JNI_FN(jint, transport)(JNIEnv *, jobject, jlong h) { return static_cast<jint>(engine(h).transport()); }
 
 JNI_FN(jboolean, isPlaying)(JNIEnv *, jobject, jlong h) { return engine(h).isPlaying() ? JNI_TRUE : JNI_FALSE; }
@@ -87,8 +89,8 @@ JNI_FN(jint, outputDeviceId)(JNIEnv *, jobject, jlong h) { return engine(h).outp
 
 JNI_FN(jint, inputDeviceId)(JNIEnv *, jobject, jlong h) { return engine(h).inputDeviceId(); }
 
-JNI_FN(jboolean, startRecording)(JNIEnv *, jobject, jlong h, jlong fromFrame) {
-    return engine(h).startRecording(fromFrame) ? JNI_TRUE : JNI_FALSE;
+JNI_FN(jboolean, startRecording)(JNIEnv *, jobject, jlong h, jlong fromFrame, jint transpose) {
+    return engine(h).startRecording(fromFrame, transpose) ? JNI_TRUE : JNI_FALSE;
 }
 
 JNI_FN(void, stopRecording)(JNIEnv *, jobject, jlong h) { engine(h).stopRecording(); }
@@ -101,8 +103,8 @@ JNI_FN(jlong, takeReportedLatencyFrames)(JNIEnv *, jobject, jlong h) { return en
 
 JNI_FN(jlong, takeXRunCorrectionFrames)(JNIEnv *, jobject, jlong h) { return engine(h).takeXRunCorrectionFrames(); }
 
-JNI_FN(jboolean, playTake)(JNIEnv *, jobject, jlong h, jlong alignmentFrames) {
-    return engine(h).playTake(alignmentFrames) ? JNI_TRUE : JNI_FALSE;
+JNI_FN(jboolean, playTake)(JNIEnv *, jobject, jlong h, jlong alignmentFrames, jint transpose) {
+    return engine(h).playTake(alignmentFrames, transpose) ? JNI_TRUE : JNI_FALSE;
 }
 
 JNI_FN(void, clearTake)(JNIEnv *, jobject, jlong h) { engine(h).clearTake(); }

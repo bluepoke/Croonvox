@@ -9,6 +9,7 @@ import app.croonvox.core.lyrics.TrackLyrics
 import app.croonvox.core.model.Take
 import app.croonvox.core.model.TakeId
 import app.croonvox.core.model.TrackId
+import app.croonvox.core.model.Transpose
 import app.croonvox.core.port.InputLevel
 import app.croonvox.core.port.Playback
 import app.croonvox.core.session.BackingAudio
@@ -77,6 +78,7 @@ class SessionViewModel(
     val countdownEnabled: StateFlow<Boolean> = from(false) { it.countdownEnabled }
     val reviewBackingDb: StateFlow<Float> = from(Session.DEFAULT_REVIEW_BACKING_DB) { it.reviewBackingDb }
     val takes: StateFlow<List<Take>> = from(emptyList()) { it.takes }
+    val transpose: StateFlow<Transpose> = from(Transpose.None) { it.transpose }
 
     init {
         viewModelScope.launch {
@@ -135,6 +137,8 @@ class SessionViewModel(
     fun setInputGain(gainDb: Float) = act { it.setInputGain(gainDb) }
 
     fun setReviewBackingDb(gainDb: Float) = act { it.setReviewBackingDb(gainDb) }
+
+    fun setTranspose(transpose: Transpose) = act { it.setTranspose(transpose) }
 
     private fun act(block: suspend (Session) -> Unit) {
         val open = session.value ?: return

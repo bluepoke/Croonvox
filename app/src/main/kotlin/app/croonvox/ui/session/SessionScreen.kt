@@ -46,6 +46,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -65,6 +66,7 @@ import app.croonvox.core.model.SourceId
 import app.croonvox.core.model.Take
 import app.croonvox.core.model.TakeId
 import app.croonvox.core.model.TrackId
+import app.croonvox.core.model.Transpose
 import app.croonvox.core.port.CapturedTake
 import app.croonvox.core.port.InputLevel
 import app.croonvox.core.port.LyricsCandidate
@@ -122,12 +124,13 @@ fun SessionRoute(id: TrackId, sessions: Sessions, lyrics: LyricsRepository, lyri
     val trackLyrics by viewModel.lyrics.collectAsStateWithLifecycle()
     val offsetMs by viewModel.lyricsOffsetMs.collectAsStateWithLifecycle()
     val karaoke by viewModel.karaoke.collectAsStateWithLifecycle()
+    val transpose by viewModel.transpose.collectAsStateWithLifecycle()
 
     SessionScreen(
         title = title,
         openError = openError,
         snackbar = snackbar,
-        content = SessionContent(state, backing, playback, input, gain, countdown, reviewBacking, takes, trackLyrics, offsetMs, karaoke),
+        content = SessionContent(state, backing, playback, input, gain, countdown, reviewBacking, takes, trackLyrics, offsetMs, karaoke, transpose),
         actions = SessionActions(
             onTogglePlay = viewModel::togglePlay,
             onSeek = viewModel::seekTo,
@@ -147,6 +150,7 @@ fun SessionRoute(id: TrackId, sessions: Sessions, lyrics: LyricsRepository, lyri
             onShowKaraoke = viewModel::showKaraoke,
             onNudgeLyricsOffset = viewModel::nudgeLyricsOffset,
             onResetLyricsOffset = viewModel::resetLyricsOffset,
+            onTranspose = viewModel::setTranspose,
         ),
     )
 }
@@ -165,6 +169,8 @@ data class SessionContent(
     val lyricsOffsetMs: Long,
     /** Karaoke View rather than Page View, when the Lyrics are synced. */
     val karaoke: Boolean,
+    /** The Transpose control: free playback and the next Take. */
+    val transpose: Transpose,
 )
 
 data class SessionActions(
@@ -186,6 +192,7 @@ data class SessionActions(
     val onShowKaraoke: (Boolean) -> Unit = {},
     val onNudgeLyricsOffset: (Long) -> Unit = {},
     val onResetLyricsOffset: () -> Unit = {},
+    val onTranspose: (Transpose) -> Unit = {},
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -246,6 +253,7 @@ private fun SessionControls(openError: String?, content: SessionContent, actions
             BackingLine(content.backing)
             Position(content.state, content.playback, actions.onSeek)
             Transport(content.state, content.playback, content.reviewBackingDb, actions)
+            TransposeControl(content.transpose, content.state, actions.onTranspose)
             HorizontalDivider()
             Microphone(content.input, content.inputGainDb, actions.onGain)
             SettingRow("Countdown before recording (${Session.COUNTDOWN_SECONDS} s)", content.countdownEnabled, actions.onCountdown)
@@ -312,11 +320,44 @@ private fun Transport(state: SessionState, playback: Playback, reviewBackingDb: 
             )
             Button(onClick = actions.onStop) { Text("Stop") }
         }
-        is SessionState.Review -> Review(state.take, playback, reviewBackingDb, actions)
+        is SessionState.Review -> Review(state.take, state.transpose, playback, reviewBackingDb, actions)
         is SessionState.PlayingTake -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Playing ${state.take.name}", style = MaterialTheme.typography.titleMedium)
             Button(onClick = actions.onStop) { Text("Stop") }
             ReviewBalance(reviewBackingDb, actions.onReviewBalance)
+        }
+    }
+}
+
+/** The Transpose control (ADR 5). A Take being recorded or played back keeps its own Transpose. */
+@Composable
+private fun TransposeControl(transpose: Transpose, state: SessionState, onChange: (Transpose) -> Unit) {
+    // The Transpose the Backing Audio is bound to while a Take records or plays back.
+    val takeTranspose = when (state) {
+        is SessionState.Recording -> state.transpose
+        is SessionState.Review -> state.transpose
+        is SessionState.PlayingTake -> state.take.transpose
+        else -> null
+    }
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Transpose", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+            OutlinedButton(
+                onClick = { onChange(Transpose(transpose.semitones - 1)) },
+                enabled = transpose.semitones > Transpose.MIN,
+            ) { Text("−") }
+            Text(transpose.label(), Modifier.width(48.dp), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
+            OutlinedButton(
+                onClick = { onChange(Transpose(transpose.semitones + 1)) },
+                enabled = transpose.semitones < Transpose.MAX,
+            ) { Text("+") }
+        }
+        if (takeTranspose != null && takeTranspose != transpose) {
+            Text(
+                "This Take stays at ${takeTranspose.label()}; the new setting applies to the next Take.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -333,11 +374,11 @@ private fun RecordButton(label: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun Review(take: CapturedTake, playback: Playback, reviewBackingDb: Float, actions: SessionActions) {
+private fun Review(take: CapturedTake, transpose: Transpose, playback: Playback, reviewBackingDb: Float, actions: SessionActions) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Review", style = MaterialTheme.typography.titleMedium)
         Text(
-            "Take from ${formatTime(take.startPositionMs)}, ${formatTime(take.durationMs)} long",
+            "Take from ${formatTime(take.startPositionMs)}, ${formatTime(take.durationMs)} long, Transpose ${transpose.label()}",
             style = MaterialTheme.typography.bodyMedium,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -441,7 +482,9 @@ private fun Takes(takes: List<Take>, state: SessionState, actions: SessionAction
     takes.forEach { take ->
         ListItem(
             headlineContent = { Text(take.name) },
-            supportingContent = { Text("From ${formatTime(take.startPositionMs)} · ${formatTime(take.durationMs)} · ${take.route.label()}") },
+            supportingContent = {
+                Text("From ${formatTime(take.startPositionMs)} · ${formatTime(take.durationMs)} · ${take.transpose.label()} · ${take.route.label()}")
+            },
             trailingContent = {
                 Row {
                     TextButton(onClick = { actions.onPlayTake(take.id) }, enabled = state == SessionState.Idle) { Text("Play") }
@@ -490,6 +533,13 @@ private const val METER_FLOOR_DB = -60f
 
 private fun formatDb(db: Float): String = if (db > 0) "+${db.roundToInt()} dB" else "${db.roundToInt()} dB"
 
+/** Semitones with a sign, e.g. "+2", "−3", "0". */
+private fun Transpose.label(): String = when {
+    semitones > 0 -> "+$semitones"
+    semitones < 0 -> "−${-semitones}"
+    else -> "0"
+}
+
 private fun InputDevice.label(): String = when (this) {
     InputDevice.BuiltIn -> "built-in"
     InputDevice.Wired -> "headset"
@@ -510,14 +560,14 @@ private fun OutputRoute.label(): String = when (this) {
 @Composable
 private fun ReviewPreview() {
     val take = CapturedTake(startFrame = 1_440_000, frames = 480_000, sampleRate = 48_000, route = OutputRoute.Wired, reportedLatencyFrames = 4_000)
-    val kept = Take(TakeId("1"), TrackId(SourceId("local"), "x"), "Take 1", 0, 960_000, 48_000, OutputRoute.Wired, 4_000, 0)
+    val kept = Take(TakeId("1"), TrackId(SourceId("local"), "x"), "Take 1", 0, 960_000, 48_000, OutputRoute.Wired, 4_000, Transpose(2), 0)
     CroonvoxTheme {
         SessionScreen(
             title = "Fly Me to the Moon",
             openError = null,
             snackbar = remember { SnackbarHostState() },
             content = SessionContent(
-                state = SessionState.Review(take),
+                state = SessionState.Review(take, Transpose(-2)),
                 backing = BackingAudio.OriginalAudio,
                 playback = Playback(null, playing = true, positionMs = 32_000, durationMs = 180_000, playingTake = true),
                 input = InputLevel(enabled = true, device = InputDevice.BuiltIn, peak = 0.6f, clipping = true),
@@ -530,6 +580,7 @@ private fun ReviewPreview() {
                 ),
                 lyricsOffsetMs = 0,
                 karaoke = true,
+                transpose = Transpose(1),
             ),
             actions = SessionActions(),
         )

@@ -4,6 +4,7 @@ package app.croonvox.core.testing
 import app.croonvox.core.model.AudioFile
 import app.croonvox.core.model.InputDevice
 import app.croonvox.core.model.OutputRoute
+import app.croonvox.core.model.Transpose
 import app.croonvox.core.port.AudioEngine
 import app.croonvox.core.port.CapturedTake
 import app.croonvox.core.port.InputLevel
@@ -88,6 +89,25 @@ class FakeAudioEngine(private val durationsMs: Map<AudioFile, Long> = emptyMap()
         state.update { it.copy(playing = false, playingTake = false) }
     }
 
+    /** The last value passed to [setTranspose]. */
+    var playbackTranspose = Transpose.None
+        private set
+
+    private var recordingTranspose = Transpose.None
+    private var takeTranspose = Transpose.None
+
+    /** The Transpose the Backing Audio plays at right now. */
+    val audibleTranspose: Transpose
+        get() = when {
+            state.value.recording -> recordingTranspose
+            state.value.playingTake -> takeTranspose
+            else -> playbackTranspose
+        }
+
+    override fun setTranspose(transpose: Transpose) {
+        playbackTranspose = transpose
+    }
+
     override fun seekTo(positionMs: Long) {
         state.update { it.copy(positionMs = positionMs.coerceIn(0, it.durationMs)) }
     }
@@ -99,6 +119,7 @@ class FakeAudioEngine(private val durationsMs: Map<AudioFile, Long> = emptyMap()
     override fun endSession() {
         inSession = false
         heldTake = null
+        playbackTranspose = Transpose.None
         inputState.value = InputLevel.Off
         state.update { it.copy(playing = false, recording = false, playingTake = false) }
     }
@@ -114,9 +135,10 @@ class FakeAudioEngine(private val durationsMs: Map<AudioFile, Long> = emptyMap()
         inputGainDb = gainDb
     }
 
-    override suspend fun startRecording(fromMs: Long): Boolean {
+    override suspend fun startRecording(fromMs: Long, transpose: Transpose): Boolean {
         if (!inputState.value.enabled || state.value.loaded == null) return false
         heldTake = null
+        recordingTranspose = transpose
         val from = fromMs.coerceIn(0, state.value.durationMs)
         recordingFromMs = from
         state.update { it.copy(playing = true, recording = true, playingTake = false, positionMs = from) }
@@ -150,9 +172,10 @@ class FakeAudioEngine(private val durationsMs: Map<AudioFile, Long> = emptyMap()
         return true
     }
 
-    override suspend fun playTake(alignmentFrames: Long): Boolean {
+    override suspend fun playTake(alignmentFrames: Long, transpose: Transpose): Boolean {
         val take = heldTake ?: return false
         lastAlignmentFrames = alignmentFrames
+        takeTranspose = transpose
         state.update {
             it.copy(playing = true, playingTake = true, recording = false, positionMs = take.startFrame / FRAMES_PER_MS)
         }
