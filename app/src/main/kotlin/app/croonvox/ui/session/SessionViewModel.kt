@@ -3,13 +3,19 @@ package app.croonvox.ui.session
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.croonvox.core.library.TrackRepository
 import app.croonvox.core.lyrics.LyricsOffset
 import app.croonvox.core.lyrics.LyricsRepository
+import app.croonvox.core.lyrics.MatchLyrics
 import app.croonvox.core.lyrics.TrackLyrics
+import app.croonvox.core.model.BackingChoice
 import app.croonvox.core.model.Take
 import app.croonvox.core.model.TakeId
+import app.croonvox.core.model.Track
 import app.croonvox.core.model.TrackId
 import app.croonvox.core.model.Transpose
+import app.croonvox.core.pipeline.TrackPipeline
+import app.croonvox.core.pipeline.VocalFreeToggle
 import app.croonvox.core.port.InputLevel
 import app.croonvox.core.port.Playback
 import app.croonvox.core.session.BackingAudio
@@ -24,19 +30,30 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-/** Holds one open [Session] for as long as the Session screen is on the back stack. */
+/**
+ * The Track screen: the Track's status, Lyrics and Vocal-Free toggle, and the [Session] on it,
+ * which opens as soon as the Original Audio is stored (ADR 10) and stays open while the screen is
+ * on the back stack.
+ */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SessionViewModel(
     private val id: TrackId,
+    tracks: TrackRepository,
     sessions: Sessions,
+    private val pipeline: TrackPipeline,
     lyrics: LyricsRepository,
+    private val match: MatchLyrics,
     private val lyricsOffset: LyricsOffset,
+    private val vocalFree: VocalFreeToggle,
 ) : ViewModel() {
+    /** The Track as it is now: Track Pipeline, Vocal-Free, Backing Audio choice. */
+    val track: StateFlow<Track?> = tracks.observe(id).stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
     /** The Track's Lyrics; they may still change (e.g. a search finishing). */
     val lyrics: StateFlow<TrackLyrics?> = lyrics.observe(id).stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
@@ -44,7 +61,7 @@ class SessionViewModel(
     val lyricsOffsetMs: StateFlow<Long> = lyricsOffset.observe(id).stateIn(viewModelScope, SharingStarted.Eagerly, 0L)
 
     private val _karaoke = MutableStateFlow(true)
-    /** Karaoke View (if the Lyrics are synced) rather than Page View; for this Session only. */
+    /** Karaoke View (if the Lyrics are synced) rather than Page View; for this screen only. */
     val karaoke: StateFlow<Boolean> = _karaoke
 
     fun showKaraoke(karaoke: Boolean) {
@@ -59,7 +76,40 @@ class SessionViewModel(
         viewModelScope.launch { lyricsOffset.reset(id) }
     }
 
+    /** Confirms the suggested Lyrics (ADR 6). */
+    fun confirmLyrics() {
+        viewModelScope.launch { match.confirm(id) }
+    }
+
+    /** Runs a failed step of the Track Pipeline again. */
+    fun retry() {
+        viewModelScope.launch { pipeline.retry(id) }
+    }
+
+    private val _confirmVocalFree = MutableStateFlow<Long?>(null)
+
+    /** Bytes of stems that marking the Track Vocal-Free would delete, while waiting for the user to confirm. */
+    val confirmVocalFree: StateFlow<Long?> = _confirmVocalFree
+
+    /** The Vocal-Free toggle (ADR 14): turning it on asks first if stems would be deleted. */
+    fun setVocalFree(on: Boolean) {
+        viewModelScope.launch {
+            if (!on) return@launch vocalFree.unmark(id)
+            val bytes = vocalFree.stemBytes(id)
+            if (bytes > 0) _confirmVocalFree.value = bytes else vocalFree.mark(id)
+        }
+    }
+
+    fun confirmVocalFree(confirmed: Boolean) {
+        _confirmVocalFree.value = null
+        if (confirmed) viewModelScope.launch { vocalFree.mark(id) }
+    }
+
     private val session = MutableStateFlow<Session?>(null)
+
+    private val _loadProgress = MutableStateFlow(0f)
+    /** How much of the Backing Audio is prepared, 0..1, while the Session opens. */
+    val loadProgress: StateFlow<Float> = _loadProgress
 
     private val _openError = MutableStateFlow<String?>(null)
     /** Why the Session couldn't open, if it couldn't. */
@@ -69,11 +119,12 @@ class SessionViewModel(
     /** A one-off message for the user (shown once, then [messageShown]). */
     val message: StateFlow<String?> = _message
 
-    val title: StateFlow<String> = from("") { flowOf(it.track.title) }
     val state: StateFlow<SessionState> = from(SessionState.Idle) { it.state }
     val playback: StateFlow<Playback> = from(Playback.Idle) { it.playback }
     val input: StateFlow<InputLevel> = from(InputLevel.Off) { it.input }
     val inputGainDb: StateFlow<Float> = from(0f) { it.inputGainDb }
+
+    /** What plays now; null until the Session is open. */
     val backing: StateFlow<BackingAudio?> = from(null) { it.backing }
     val countdownEnabled: StateFlow<Boolean> = from(false) { it.countdownEnabled }
     val reviewBackingDb: StateFlow<Float> = from(Session.DEFAULT_REVIEW_BACKING_DB) { it.reviewBackingDb }
@@ -82,8 +133,10 @@ class SessionViewModel(
 
     init {
         viewModelScope.launch {
+            // A Track still downloading opens once its Original Audio is stored (ADR 10).
+            track.first { it?.hasOriginalAudio == true }
             try {
-                session.value = sessions.open(id, viewModelScope)
+                session.value = sessions.open(id, viewModelScope) { _loadProgress.value = it }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -94,6 +147,9 @@ class SessionViewModel(
 
     private fun <T> from(initial: T, select: (Session) -> Flow<T>): StateFlow<T> =
         session.filterNotNull().flatMapLatest(select).stateIn(viewModelScope, SharingStarted.Eagerly, initial)
+
+    /** The Backing Audio choice (Instrumental / Original Audio), kept for the Track. */
+    fun chooseBacking(choice: BackingChoice) = act { it.chooseBacking(choice) }
 
     /** The microphone permission is granted: open the microphone for the meter. */
     fun onMicrophoneAllowed() = act { it.enableMicrophone() }
@@ -156,6 +212,7 @@ class SessionViewModel(
     }
 
     override fun onCleared() {
+        // Does nothing if the next Track's Session has closed it already.
         session.value?.close()
     }
 }

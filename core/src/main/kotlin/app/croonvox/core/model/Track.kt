@@ -10,14 +10,26 @@ data class Track(
     val artist: String?,
     val durationMs: Long?,
     val pipeline: TrackPipelineState,
-    /** When a Session on the Track was last opened (epoch ms); null if it was never sung. */
+    /** When a Take of the Track last started recording (epoch ms), "last sung"; null if it was never sung. */
     val lastSessionAt: Long? = null,
     /**
      * The Original Audio has no lead vocal, so the Track skips Separation and always sings over
      * its Original Audio (GLOSSARY: Vocal-Free, ADR 14). Set by the user.
      */
     val vocalFree: Boolean = false,
+    /**
+     * What the user wants to sing over (GLOSSARY: Backing Audio), kept per Track. The Instrumental
+     * plays only once there is one (see [instrumentalModel]); the Original Audio plays meanwhile.
+     */
+    val backingChoice: BackingChoice = BackingChoice.Instrumental,
 ) {
+    /**
+     * The Separation Model whose Instrumental is stored, once the Track is Ready with stems; null
+     * before, and always for a Vocal-Free Track (ADR 14).
+     */
+    val instrumentalModel: SeparationModelId?
+        get() = (pipeline as? TrackPipelineState.Ready)?.model
+
     /** The Original Audio is stored, so the Track can be played and sung (ADR 10). */
     val hasOriginalAudio: Boolean
         get() = when (pipeline) {
@@ -26,6 +38,12 @@ data class Track(
             is TrackPipelineState.StemsDeleted -> true
             is TrackPipelineState.Failed -> pipeline.step != PipelineStep.Downloading
         }
+}
+
+/** Which Backing Audio the user chose for a Track (GLOSSARY: Backing Audio). */
+enum class BackingChoice {
+    Instrumental,
+    OriginalAudio,
 }
 
 /** Track identity: the Source plus that Source's own ID for the item (ADR 10). */

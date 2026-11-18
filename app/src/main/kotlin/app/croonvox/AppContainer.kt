@@ -18,7 +18,6 @@ import app.croonvox.core.pipeline.DownloadTrack
 import app.croonvox.core.pipeline.SeparateTrack
 import app.croonvox.core.pipeline.TrackPipeline
 import app.croonvox.core.pipeline.VocalFreeToggle
-import app.croonvox.core.player.TrackPlayer
 import app.croonvox.core.port.AudioEngine
 import app.croonvox.core.port.LyricsProvider
 import app.croonvox.core.port.Separator
@@ -69,7 +68,6 @@ class AppContainer(private val context: Context) {
         TrackStorage(trackRepository, takeRepository, trackFiles, pipelineJobs, SeparationCatalogue.models.map { it.id })
     }
     val importLocalFile: ImportLocalFile by lazy { ImportLocalFile(trackRepository, trackFiles) }
-    val trackPlayer: TrackPlayer by lazy { TrackPlayer(trackRepository, trackFiles, audioEngine) }
     val sessions: Sessions by lazy {
         Sessions(trackRepository, takeRepository, trackFiles, audioEngine, settingsRepository)
     }

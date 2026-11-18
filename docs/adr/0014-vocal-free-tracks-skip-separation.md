@@ -1,6 +1,6 @@
 # 14. Vocal-Free Tracks skip Separation
 
-- Status: Accepted (amends ADR 2, ADR 7, ADR 10)
+- Status: Accepted (amends ADR 2, ADR 7, ADR 10; amended by ADR 20)
 - Date: 2026-11-16
 
 ## Context
@@ -23,6 +23,7 @@ Some Original Audio has no lead vocal to remove, for example the audio of a kara
 - Marking, and every state a Separation job writes, are **atomic changes of the Track**. A job that hasn't stopped yet when the Track is marked can't write `Separating` or `Ready` over it.
 - Deleted stems (ADR 17) don't come back for a Vocal-Free Track: marking a `Stems Deleted` Track makes it `Ready` at once.
 - Mixes (#14), the Backing Audio choice (#17) and the Guide Vocal (#18) don't exist yet. Their parts of this decision land with those tickets.
+- Since ADR 20 (#34), Track detail and the Session are one screen per Track: the toggle and the snackbar are there, and the Backing Audio choice, built in #34, is hidden on a Vocal-Free Track.
 
 ## Considered Options
 - **The Original Audio counts as the Instrumental** (a copy or a reference, with no Vocal Stem). It keeps "Instrumental by default", but the Backing Audio choice would offer the same audio twice, and Mixes would reference an Instrumental "by Separation Model" that no model produced. Rejected.

@@ -3,6 +3,7 @@ package app.croonvox.data
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
+import app.croonvox.core.model.BackingChoice
 import app.croonvox.core.model.PipelineStep
 import app.croonvox.core.model.SeparationModelId
 import app.croonvox.core.model.SourceId
@@ -25,10 +26,12 @@ internal data class TrackEntity(
     @ColumnInfo(name = "pipeline_progress") val pipelineProgress: String? = null,
     /** Why the Track is Failed (version 3, #7), or why a download waits to retry (#6). */
     @ColumnInfo(name = "pipeline_failure") val pipelineFailure: String? = null,
-    /** When a Session was last opened on the Track (version 8, #20). */
+    /** When a Take of the Track last started recording (version 8, #20; since #34 not on opening). */
     @ColumnInfo(name = "last_session_at") val lastSessionAt: Long? = null,
     /** The Track is Vocal-Free (version 9, #25). */
     @ColumnInfo(name = "vocal_free", defaultValue = "0") val vocalFree: Boolean = false,
+    /** The Backing Audio the user chose (version 10, #34): `instrumental` or `original_audio`. */
+    @ColumnInfo(name = "backing_choice", defaultValue = INSTRUMENTAL) val backingChoice: String = INSTRUMENTAL,
 )
 
 internal fun Track.toEntity(addedAt: Long): TrackEntity {
@@ -45,6 +48,7 @@ internal fun Track.toEntity(addedAt: Long): TrackEntity {
         pipelineFailure = pipelineColumns.failure,
         lastSessionAt = lastSessionAt,
         vocalFree = vocalFree,
+        backingChoice = backingChoice.toColumn(),
     )
 }
 
@@ -56,7 +60,19 @@ internal fun TrackEntity.toTrack() = Track(
     pipeline = PipelineColumns(pipelineState, pipelineProgress, pipelineFailure).toState(),
     lastSessionAt = lastSessionAt,
     vocalFree = vocalFree,
+    backingChoice = backingChoiceFromColumn(backingChoice),
 )
+
+private fun BackingChoice.toColumn(): String = when (this) {
+    BackingChoice.Instrumental -> INSTRUMENTAL
+    BackingChoice.OriginalAudio -> ORIGINAL_AUDIO
+}
+
+private fun backingChoiceFromColumn(value: String): BackingChoice = when (value) {
+    INSTRUMENTAL -> BackingChoice.Instrumental
+    ORIGINAL_AUDIO -> BackingChoice.OriginalAudio
+    else -> error("unknown Backing Audio choice '$value'")
+}
 
 /** The pipeline columns of a row. Stored as stable strings so enum/class renames don't corrupt data. */
 internal data class PipelineColumns(val state: String, val progress: String? = null, val failure: String? = null)
@@ -123,6 +139,8 @@ private fun stepFromColumn(value: String): PipelineStep = when (value) {
     else -> error("unknown pipeline step '$value'")
 }
 
+private const val INSTRUMENTAL = "instrumental"
+private const val ORIGINAL_AUDIO = "original_audio"
 private const val SEPARATING_PREFIX = "separating:"
 private const val READY = "ready"
 private const val READY_PREFIX = "ready:"

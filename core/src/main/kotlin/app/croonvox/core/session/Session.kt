@@ -4,11 +4,11 @@ package app.croonvox.core.session
 import app.croonvox.core.library.TrackFiles
 import app.croonvox.core.library.TrackRepository
 import app.croonvox.core.model.AudioFile
+import app.croonvox.core.model.BackingChoice
 import app.croonvox.core.model.SeparationModelId
 import app.croonvox.core.model.Take
 import app.croonvox.core.model.TakeId
 import app.croonvox.core.model.Track
-import app.croonvox.core.model.TrackPipelineState
 import app.croonvox.core.model.Transpose
 import app.croonvox.core.port.AudioEngine
 import app.croonvox.core.port.CapturedTake
@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Singing over one Track (GLOSSARY: Session, ADR 9): playback of the Backing Audio, recording
@@ -63,7 +64,10 @@ class Session private constructor(
 
     private val _backing = MutableStateFlow<BackingAudio>(BackingAudio.OriginalAudio)
 
-    /** What plays under the singer: the Instrumental once Separation finished, else the Original Audio. */
+    /**
+     * What plays under the singer: the Track's [Track.backingChoice], but the Original Audio until
+     * there is an Instrumental (see [backingAudio]).
+     */
     val backing: StateFlow<BackingAudio> = _backing
 
     /** Backing Audio that became available while the Session was busy; loaded once it is [SessionState.Idle]. */
@@ -105,6 +109,21 @@ class Session private constructor(
     /** Moves the position where playback and the next Take start. */
     fun seekTo(positionMs: Long) {
         if (_state.value == SessionState.Idle) engine.seekTo(positionMs)
+    }
+
+    /**
+     * Stores the Backing Audio [choice] for the Track. During free playback it is heard at once,
+     * at the same position; while a Take is recorded, reviewed or played back, once the Session is
+     * Idle again. Returns false, and changes nothing, for the Instrumental while the Track has none.
+     */
+    suspend fun chooseBacking(choice: BackingChoice): Boolean {
+        var chosen = false
+        deps.tracks.update(track.id) { now ->
+            chosen = choice == BackingChoice.OriginalAudio || now.instrumentalModel != null
+            if (chosen) now.copy(backingChoice = choice) else null
+        }
+        // The Track observer in observe() loads it.
+        return chosen
     }
 
     // --- Transpose (ADR 5) ---
@@ -277,8 +296,14 @@ class Session private constructor(
         deps.files.deleteTake(track.id, take)
     }
 
-    /** Leaves the Session: stops audio and returns the Audio Engine to plain playback. */
+    private val closed = AtomicBoolean(false)
+
+    /**
+     * Leaves the Session: stops audio and returns the Audio Engine to plain playback. Does nothing
+     * if it was closed already, e.g. by [Sessions.open] for the next Track.
+     */
     fun close() {
+        if (!closed.compareAndSet(false, true)) return
         observers.cancel()
         engine.endSession()
         load?.let(engine::unload)
@@ -327,6 +352,8 @@ class Session private constructor(
             throw MicrophoneUnavailable()
         }
         _state.value = SessionState.Recording(fromMs, transpose)
+        // "Last sung" in the Library: singing, not opening the Track to listen.
+        deps.tracks.setLastSessionAt(track.id, deps.clock())
     }
 
     private suspend fun finishRecordingLocked() {
@@ -371,18 +398,18 @@ class Session private constructor(
         return "Take $n"
     }
 
-    private suspend fun start() {
+    private suspend fun start(onProgress: (Float) -> Unit) {
         _countdownEnabled.value = deps.settings.countdownEnabled()
         _reviewBackingDb.value = deps.settings.reviewBackingDb() ?: DEFAULT_REVIEW_BACKING_DB
         engine.setReviewBackingGain(_reviewBackingDb.value)
         engine.beginSession()
         engine.setTranspose(_transpose.value)
-        loadBacking(backingFor(track))
+        loadBacking(track.backingAudio(), onProgress)
         observe()
     }
 
-    private suspend fun loadBacking(backing: BackingAudio) {
-        load = engine.load(fileOf(backing))
+    private suspend fun loadBacking(backing: BackingAudio, onProgress: (Float) -> Unit = {}) {
+        load = engine.load(fileOf(backing), onProgress)
         _backing.value = backing
     }
 
@@ -410,9 +437,9 @@ class Session private constructor(
             }
         }
         observers.launch {
-            // Separation finished (ADR 10): switch to the Instrumental, but never under a Take
-            // that is being recorded or reviewed.
-            deps.tracks.observe(track.id).filterNotNull().map { backingFor(it) }.distinctUntilChanged().collect { backing ->
+            // Separation finished (ADR 10) or the user chose other Backing Audio: switch, but never
+            // under a Take that is being recorded, reviewed or played back.
+            deps.tracks.observe(track.id).filterNotNull().map { it.backingAudio() }.distinctUntilChanged().collect { backing ->
                 mutex.withLock {
                     if (_state.value == SessionState.Idle) {
                         val now = engine.playback.value
@@ -433,12 +460,6 @@ class Session private constructor(
         }
     }
 
-    private fun backingFor(track: Track): BackingAudio = when (val pipeline = track.pipeline) {
-        // A Vocal-Free Track (no stems) always sings over its Original Audio (ADR 14).
-        is TrackPipelineState.Ready -> pipeline.model?.let(BackingAudio::Instrumental) ?: BackingAudio.OriginalAudio
-        else -> BackingAudio.OriginalAudio
-    }
-
     private fun fileOf(backing: BackingAudio): AudioFile = when (backing) {
         BackingAudio.OriginalAudio -> deps.files.originalAudio(track.id)
         is BackingAudio.Instrumental -> deps.files.stems(track.id, backing.model).instrumental
@@ -452,9 +473,18 @@ class Session private constructor(
         const val DEFAULT_REVIEW_BACKING_DB = -20f
         const val MIN_REVIEW_BACKING_DB = -40f
 
-        internal suspend fun open(track: Track, scope: CoroutineScope, deps: Dependencies): Session =
-            Session(track, scope, deps).also { it.start() }
+        internal suspend fun open(track: Track, scope: CoroutineScope, deps: Dependencies, onProgress: (Float) -> Unit): Session =
+            Session(track, scope, deps).also { it.start(onProgress) }
     }
+}
+
+/**
+ * What a Session on the Track plays: its [Track.backingChoice] once it has an Instrumental, else
+ * the Original Audio. A Vocal-Free Track has none, so it always sings over its Original Audio (ADR 14).
+ */
+fun Track.backingAudio(): BackingAudio {
+    val model = instrumentalModel
+    return if (model != null && backingChoice == BackingChoice.Instrumental) BackingAudio.Instrumental(model) else BackingAudio.OriginalAudio
 }
 
 /** What plays under the singer in a Session (GLOSSARY: Backing Audio). */

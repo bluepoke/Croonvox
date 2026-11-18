@@ -20,7 +20,7 @@ Prerequisites: a Track imported from a local file, wired headphones, and a way t
 8. **Stored Takes.** Play a kept Take from the list: it plays against the Backing Audio from its Start Position and stops at its end. Rename it, then delete it after confirming. Restart the app: the remaining Takes are listed and still play.
 9. **End of song.** Start recording 5 s before the end: Review opens by itself when the song ends.
 10. **Route change.** Unplug the headphones while recording: the app doesn't crash, the recording ends and Review shows the part recorded so far. Playback and recording work again on the new route.
-11. **Leaving the Session.** Press Back during playback: audio stops. The Track detail screen plays again with its normal controls.
+11. **Leaving the Session.** Press Back during playback: audio stops and the Library shows. Since #34 the Track's screen is the Session.
 
 ## Transpose (#10)
 
@@ -31,7 +31,7 @@ Prerequisites: a Ready Track with a sustained note or a clear melody, wired head
 3. **Bound to the Take.** At −2, record 10 s. While recording, press + twice: the backing stays at −2 and a note says the new setting applies to the next Take. In Review, the Take plays at −2 and Review shows "Transpose −2". Keep it: the list shows "−2". With the control at 0, play the kept Take: the backing plays at −2.
 4. **Alignment when transposed (loopback).** At +4, record a loopback Take over a passage with clear transients. In Review the recorded copy sits on the played audio as closely as at Transpose 0 (#8 item 6): the stretcher adds no offset.
 5. **CPU.** At +6, record a 3-minute Take while using the phone. No audible glitches; the xrun correction from #8 item 7 stays small. Then start and stop playback and recording at +6 ten times, and seek a few times: no click or dropout at the start (the stretcher is primed in the first callback).
-6. **Leaving the Session.** Set +3, press Back: Track detail plays in the original key. Open the Session again: Transpose is 0.
+6. **Leaving the Session.** Set +3, press Back, then open the Track again: Transpose is 0 and it plays in the original key.
 
 ## Separation in the Track Pipeline (#7)
 
@@ -61,9 +61,21 @@ Prerequisites: two Ready Tracks, one with two kept Takes. `adb shell run-as app.
 
 Prerequisites: a karaoke version of a song (audio without a lead vocal) as a local file and as a link, plus a Ready Track with stems. Use `adb shell run-as app.croonvox du -sh files/tracks/*` to check the stems on disk.
 
-1. **Import without vocals.** Library ⋮ → **Import file without vocals**. The Track goes to "Ready · Vocal-Free" right after the import, with no "Removing vocals" and no notification. Track detail says "Playing the original audio", and the toggle is on.
+1. **Import without vocals.** Library ⋮ → **Import file without vocals**. The Track goes to "Ready · Vocal-Free" right after the import, with no "Removing vocals" and no notification. The Track's screen has no Backing Audio choice, and the toggle is on.
 2. **Search without vocals.** In a search result's sheet, tap **Add without vocal removal**. After the download the Track is Ready without Separating.
-3. **Share, then mark.** Share the karaoke link from a browser. Track detail opens with "No vocals in this song?". Tap **Mark Vocal-Free** while it is still downloading: it becomes Ready without Separating. Share a local file the same way and tap it while "Removing vocals" runs: the notification disappears, the Track is Ready, and no stems directory is left.
+3. **Share, then mark.** Share the karaoke link from a browser. The Track's screen opens with "No vocals in this song?". Tap **Mark Vocal-Free** while it is still downloading: it becomes Ready without Separating. Share a local file the same way and tap it while "Removing vocals" runs: the notification disappears, the Track is Ready, and no stems directory is left.
 4. **Mark a Ready Track.** On the Track with stems, turn the toggle on. A dialog names the space freed. Confirm: the stems are gone, playback continues on the original audio at the same position, and a kept Take still plays in sync in a Session.
 5. **Unmark.** Turn the toggle off: "Removing vocals" runs, then playback switches to the Instrumental, and Takes stay in sync.
 6. **Re-add.** Import the same file again with **Import file without vocals** while it isn't Vocal-Free: the existing Track opens unchanged and keeps separating.
+
+## One screen per Track and the Backing Audio choice (#34)
+
+Prerequisites: a Ready Track with a kept Take, a link to share that isn't in the Library yet, and wired headphones.
+
+1. **One screen.** Open a Track from the Library: lyrics on top, below the status, Lyrics, "Sing over", the transport, Transpose, the microphone, Takes and the Vocal-Free toggle. There is no Sing button.
+2. **Opens by itself.** Share the link: the Track's screen shows the download progress and the Lyrics, then the transport appears by itself once the download is done. "No vocals in this song?" shows meanwhile.
+3. **Switch while playing.** On the Ready Track, play from 1:00 and switch "Sing over" to **Original Audio** and back: each switch is heard at once at the same place, without stopping, and the kept Take still plays in sync over either.
+4. **Kept per Track.** Choose **Original Audio**, press Back and open the Track again: it is still chosen and plays.
+5. **Waits for the Take.** Record, and switch while recording: the backing doesn't change and "Switches once this Take is done." shows. After Keep or Discard the new choice plays.
+6. **Before Ready.** While a Track is "Removing vocals", **Instrumental** is greyed out with a reason and the original audio plays. If **Original Audio** is chosen when Separation finishes, it stays on the original audio; otherwise it switches to the Instrumental.
+7. **Last sung.** Open a Track you've never sung and press Back: the Library still says "Not sung yet". Record a Take: the Library shows "Sung 0 minutes ago" or similar.

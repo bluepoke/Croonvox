@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package app.croonvox.data
 
+import app.croonvox.core.model.BackingChoice
 import app.croonvox.core.model.PipelineStep
 import app.croonvox.core.model.SeparationModelId
 import app.croonvox.core.model.SourceId
@@ -38,6 +39,15 @@ class TrackEntityTest {
         )
         for (state in states) {
             assertEquals(track(state), track(state).toEntity(addedAt = 1).toTrack(), "$state")
+        }
+    }
+
+    @Test
+    fun `the Backing Audio choice is stored and read back`() {
+        for (choice in BackingChoice.entries) {
+            val track = track(TrackPipelineState.Ready(model)).copy(backingChoice = choice)
+
+            assertEquals(track, track.toEntity(addedAt = 1).toTrack(), "$choice")
         }
     }
 

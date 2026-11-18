@@ -29,7 +29,6 @@ import app.croonvox.separation.SeparationCatalogue
 import app.croonvox.ui.session.SessionRoute
 import app.croonvox.ui.storage.StorageRoute
 import app.croonvox.ui.theme.CroonvoxTheme
-import app.croonvox.ui.track.TrackDetailRoute
 
 class MainActivity : ComponentActivity() {
     private val container by lazy { (application as CroonvoxApp).container }
@@ -95,21 +94,12 @@ class MainActivity : ComponentActivity() {
                         val args = checkNotNull(entry.arguments)
                         val id = TrackId(SourceId(checkNotNull(args.getString("source"))), checkNotNull(args.getString("id")))
                         // ViewModels here are scoped to this back-stack entry and cleared on Back.
-                        TrackDetailRoute(
-                            id, container.trackRepository, container.trackPlayer, container.trackPipeline,
-                            container.lyricsRepository, container.matchLyrics, container.vocalFreeToggle,
+                        SessionRoute(
+                            id, container.trackRepository, container.sessions, container.trackPipeline,
+                            container.lyricsRepository, container.matchLyrics, container.lyricsOffset, container.vocalFreeToggle,
                             offerVocalFree = args.getBoolean("shared"),
-                            onSing = { nav.openSession(id) },
                             onChooseLyrics = { nav.navigate(route(LYRICS, id)) },
                         )
-                    }
-                    composable(
-                        SESSION,
-                        arguments = listOf(navArgument("source") { type = NavType.StringType }, navArgument("id") { type = NavType.StringType }),
-                    ) { entry ->
-                        val args = checkNotNull(entry.arguments)
-                        val id = TrackId(SourceId(checkNotNull(args.getString("source"))), checkNotNull(args.getString("id")))
-                        SessionRoute(id, container.sessions, container.lyricsRepository, container.lyricsOffset)
                     }
                     composable(
                         LYRICS,
@@ -141,7 +131,7 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Shows a Track's detail, replacing any detail screen already open (one Track at a time).
+     * Shows a Track's screen with its Session, replacing any Track screen already open (one Track at a time).
      * [shared]: it was just added from a share, so the screen offers to mark it Vocal-Free (ADR 14).
      */
     private fun NavHostController.openTrack(id: TrackId, shared: Boolean = false) {
@@ -150,16 +140,11 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun NavHostController.openSession(id: TrackId) {
-        navigate("session/${Uri.encode(id.source.value)}/${Uri.encode(id.sourceTrackId)}")
-    }
-
     private companion object {
         const val LIBRARY = "library"
         const val SEARCH = "search"
         const val STORAGE = "storage"
         const val TRACK = "track/{source}/{id}?shared={shared}"
-        const val SESSION = "session/{source}/{id}"
         const val LYRICS = "lyrics/{source}/{id}"
 
         /** [pattern] (e.g. [LYRICS]) filled in for [id]. */

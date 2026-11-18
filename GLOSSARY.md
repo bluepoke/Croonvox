@@ -17,9 +17,9 @@ Ubiquitous language for the project. Decisions are recorded in `docs/adr/`.
 | **Instrumental** | Original Audio with the lead vocal removed (and, depending on the Separation Model, backing vocals); the default playback layer in a Session. |
 | **Vocal Stem** | The original vocals Separation removed from the Instrumental: the lead vocal, plus backing vocals if the Separation Model removes them. Serves as the Guide Vocal. |
 | **Vocal-Free** | A Track whose Original Audio has no lead vocal (e.g. a karaoke video's audio), so it skips Separation and has no Instrumental or Vocal Stem. Set by the user. See ADR 14. _Avoid_: karaoke track, instrumental track. |
-| **Backing Audio** | Whatever plays under the singer in a Session: Instrumental by default, or Original Audio. Always the Original Audio on a Vocal-Free Track. |
+| **Backing Audio** | Whatever plays under the singer in a Session: the Instrumental or the Original Audio, as chosen per Track (Instrumental by default). The Original Audio until the Track has an Instrumental, and always on a Vocal-Free Track. See ADR 20. |
 | **Take** | One microphone recording of the user singing over a Track, at a fixed Transpose. A Track has many Takes. Its audio and timing are never modified after recording; only its name can change. |
-| **Session** | Singing over a Track: Backing Audio plays, Lyrics display, optional Monitoring, Practice Loop or recording of a Take, then Review. See ADR 9. |
+| **Session** | Playing and singing over a Track on its screen: Backing Audio plays, Lyrics display, optional Monitoring, Practice Loop or recording of a Take, then Review. Opening a Track opens its Session once the Original Audio is stored. See ADR 9, ADR 20. |
 | **Start Position** | Where on the Track timeline a Take begins; Takes may cover only part of the song. |
 | **Practice Loop** | A–B section looped without recording, for learning a passage. |
 | **Guide Vocal** | The Vocal Stem blended into the headphones (Session) or into a Mix at low level. Never recorded. |

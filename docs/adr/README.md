@@ -19,3 +19,4 @@
 - [17. Deleted stems come back when the Track is next opened](0017-deleted-stems-come-back-when-opened.md)
 - [18. Video in the Session is a streaming-only nice to have](0018-video-streaming-only-backlog.md)
 - [19. Three Separation Models (Fast, Medium, Best) and a pre-selected Default Separation Model](0019-three-separation-models-and-default-model.md)
+- [20. One screen per Track: Track detail and the Session merged, with a per-Track Backing Audio choice](0020-track-screen-is-the-session.md)

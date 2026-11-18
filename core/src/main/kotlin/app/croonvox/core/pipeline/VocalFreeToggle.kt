@@ -10,7 +10,7 @@ import app.croonvox.core.model.TrackId
 import app.croonvox.core.model.TrackPipelineState
 
 /**
- * The Vocal-Free toggle on Track detail (GLOSSARY: Vocal-Free, ADR 14). Marking skips or undoes
+ * The Vocal-Free toggle on the Track's screen (GLOSSARY: Vocal-Free, ADR 14). Marking skips or undoes
  * Separation; unmarking separates the Track with [defaultModel] like a newly downloaded one.
  * [models] are the Separation Models whose stems a Track may hold.
  */

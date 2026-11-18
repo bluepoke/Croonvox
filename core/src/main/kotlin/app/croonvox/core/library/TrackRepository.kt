@@ -34,6 +34,6 @@ interface TrackRepository {
     /** Removes the Track, with the Lyrics and Lyrics Offset stored for it. Does nothing if it doesn't exist. */
     suspend fun delete(id: TrackId)
 
-    /** Records that a Session on the Track was opened at [at] (epoch ms). */
+    /** Records that a Take of the Track started recording at [at] (epoch ms): when it was last sung. */
     suspend fun setLastSessionAt(id: TrackId, at: Long)
 }

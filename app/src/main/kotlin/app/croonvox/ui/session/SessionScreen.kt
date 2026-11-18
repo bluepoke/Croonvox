@@ -3,6 +3,7 @@ package app.croonvox.ui.session
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.text.format.Formatter
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -42,8 +43,10 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SingleChoiceSegmentedButtonRowScope
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -53,6 +56,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -80,15 +84,23 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import app.croonvox.core.lyrics.Lrc
 import app.croonvox.core.lyrics.LyricsOffset
 import app.croonvox.core.lyrics.LyricsRepository
+import app.croonvox.core.lyrics.MatchLyrics
 import app.croonvox.core.lyrics.TrackLyrics
 import app.croonvox.core.lyrics.candidate
+import app.croonvox.core.library.TrackRepository
+import app.croonvox.core.model.BackingChoice
 import app.croonvox.core.model.InputDevice
 import app.croonvox.core.model.OutputRoute
+import app.croonvox.core.model.SeparationModelId
 import app.croonvox.core.model.SourceId
 import app.croonvox.core.model.Take
 import app.croonvox.core.model.TakeId
+import app.croonvox.core.model.Track
 import app.croonvox.core.model.TrackId
+import app.croonvox.core.model.TrackPipelineState
 import app.croonvox.core.model.Transpose
+import app.croonvox.core.pipeline.TrackPipeline
+import app.croonvox.core.pipeline.VocalFreeToggle
 import app.croonvox.core.port.CapturedTake
 import app.croonvox.core.port.InputLevel
 import app.croonvox.core.port.LyricsCandidate
@@ -98,6 +110,9 @@ import app.croonvox.core.session.Session
 import app.croonvox.core.session.SessionState
 import app.croonvox.core.session.Sessions
 import app.croonvox.ui.formatTime
+import app.croonvox.ui.label
+import app.croonvox.ui.lyrics.details
+import app.croonvox.ui.lyrics.name
 import app.croonvox.ui.lyrics.KaraokeView
 import app.croonvox.ui.lyrics.PageView
 import app.croonvox.ui.theme.CroonvoxButtonShape
@@ -105,10 +120,25 @@ import app.croonvox.ui.theme.CroonvoxTheme
 import kotlin.math.log10
 import kotlin.math.roundToInt
 
+/** The one screen per Track: its status and Lyrics, and the Session on it (#34). */
 @Composable
-fun SessionRoute(id: TrackId, sessions: Sessions, lyrics: LyricsRepository, lyricsOffset: LyricsOffset) {
+fun SessionRoute(
+    id: TrackId,
+    tracks: TrackRepository,
+    sessions: Sessions,
+    pipeline: TrackPipeline,
+    lyrics: LyricsRepository,
+    match: MatchLyrics,
+    lyricsOffset: LyricsOffset,
+    vocalFreeToggle: VocalFreeToggle,
+    /** The Track was just added from a share, without the chance to mark it Vocal-Free first. */
+    offerVocalFree: Boolean,
+    onChooseLyrics: () -> Unit,
+) {
     val viewModel: SessionViewModel = viewModel(
-        factory = viewModelFactory { initializer { SessionViewModel(id, sessions, lyrics, lyricsOffset) } },
+        factory = viewModelFactory {
+            initializer { SessionViewModel(id, tracks, sessions, pipeline, lyrics, match, lyricsOffset, vocalFreeToggle) }
+        },
     )
     val context = LocalContext.current
     fun micAllowed() = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
@@ -122,7 +152,8 @@ fun SessionRoute(id: TrackId, sessions: Sessions, lyrics: LyricsRepository, lyri
             viewModel.onMicrophoneDenied()
         }
     }
-    val title by viewModel.title.collectAsStateWithLifecycle()
+    val track by viewModel.track.collectAsStateWithLifecycle()
+    val loadProgress by viewModel.loadProgress.collectAsStateWithLifecycle()
     val openError by viewModel.openError.collectAsStateWithLifecycle()
     val backing by viewModel.backing.collectAsStateWithLifecycle()
     // Once allowed, open the microphone right away so the meter shows before recording.
@@ -137,6 +168,32 @@ fun SessionRoute(id: TrackId, sessions: Sessions, lyrics: LyricsRepository, lyri
             viewModel.messageShown()
         }
     }
+    // A share adds at once; offer Vocal-Free afterwards, while it still saves Separation (ADR 14).
+    var offered by rememberSaveable { mutableStateOf(false) }
+    val offerable = offerVocalFree && !offered && track?.let { !it.vocalFree && it.pipeline !is TrackPipelineState.Ready } == true
+    LaunchedEffect(offerable) {
+        if (!offerable) return@LaunchedEffect
+        // Marked as offered only once it was seen: changing the key while it shows would cancel it.
+        // It goes away by itself if the offer stops making sense (marked, or Ready) meanwhile.
+        val result = snackbar.showSnackbar("No vocals in this song?", actionLabel = "Mark Vocal-Free", duration = SnackbarDuration.Long)
+        offered = true
+        if (result == SnackbarResult.ActionPerformed) viewModel.setVocalFree(true)
+    }
+    val confirmVocalFree by viewModel.confirmVocalFree.collectAsStateWithLifecycle()
+    confirmVocalFree?.let { bytes ->
+        AlertDialog(
+            onDismissRequest = { viewModel.confirmVocalFree(false) },
+            title = { Text("Mark as Vocal-Free?") },
+            text = {
+                Text(
+                    "The instrumental and the vocal stem are deleted, freeing ${Formatter.formatShortFileSize(context, bytes)}. " +
+                        "You sing over the original audio from now on. Takes stay in sync.",
+                )
+            },
+            confirmButton = { TextButton(onClick = { viewModel.confirmVocalFree(true) }, shape = CroonvoxButtonShape) { Text("Delete stems") } },
+            dismissButton = { TextButton(onClick = { viewModel.confirmVocalFree(false) }, shape = CroonvoxButtonShape) { Text("Cancel") } },
+        )
+    }
     val state by viewModel.state.collectAsStateWithLifecycle()
     val playback by viewModel.playback.collectAsStateWithLifecycle()
     val input by viewModel.input.collectAsStateWithLifecycle()
@@ -150,10 +207,11 @@ fun SessionRoute(id: TrackId, sessions: Sessions, lyrics: LyricsRepository, lyri
     val transpose by viewModel.transpose.collectAsStateWithLifecycle()
 
     SessionScreen(
-        title = title,
         openError = openError,
         snackbar = snackbar,
-        content = SessionContent(state, backing, playback, input, gain, countdown, reviewBacking, takes, trackLyrics, offsetMs, karaoke, transpose),
+        content = SessionContent(
+            track, loadProgress, state, backing, playback, input, gain, countdown, reviewBacking, takes, trackLyrics, offsetMs, karaoke, transpose,
+        ),
         actions = SessionActions(
             onTogglePlay = viewModel::togglePlay,
             onSeek = viewModel::seekTo,
@@ -174,12 +232,22 @@ fun SessionRoute(id: TrackId, sessions: Sessions, lyrics: LyricsRepository, lyri
             onNudgeLyricsOffset = viewModel::nudgeLyricsOffset,
             onResetLyricsOffset = viewModel::resetLyricsOffset,
             onTranspose = viewModel::setTranspose,
+            onChooseBacking = viewModel::chooseBacking,
+            onRetry = viewModel::retry,
+            onConfirmLyrics = viewModel::confirmLyrics,
+            onChooseLyrics = onChooseLyrics,
+            onVocalFree = viewModel::setVocalFree,
         ),
     )
 }
 
 data class SessionContent(
+    /** Null until the Track is loaded. */
+    val track: Track?,
+    /** How much of the Backing Audio is prepared while the Session opens, 0..1. */
+    val loadProgress: Float,
     val state: SessionState,
+    /** What plays now; null until the Session is open. */
     val backing: BackingAudio?,
     val playback: Playback,
     val input: InputLevel,
@@ -216,22 +284,26 @@ data class SessionActions(
     val onNudgeLyricsOffset: (Long) -> Unit = {},
     val onResetLyricsOffset: () -> Unit = {},
     val onTranspose: (Transpose) -> Unit = {},
+    val onChooseBacking: (BackingChoice) -> Unit = {},
+    val onRetry: () -> Unit = {},
+    val onConfirmLyrics: () -> Unit = {},
+    val onChooseLyrics: () -> Unit = {},
+    val onVocalFree: (Boolean) -> Unit = {},
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SessionScreen(
-    title: String,
     openError: String?,
     snackbar: SnackbarHostState,
     content: SessionContent,
     actions: SessionActions,
 ) {
     Scaffold(
-        topBar = { TopAppBar(title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) }) },
+        topBar = { TopAppBar(title = { TrackTitle(content.track) }) },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
-        // Lyrics on top (Page View), the Session's controls below; each half scrolls on its own.
+        // Lyrics on top, the Track's status and the Session's controls below; each half scrolls on its own.
         Column(Modifier.fillMaxSize().padding(padding)) {
             LyricsPane(content, actions, Modifier.weight(1f).fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 16.dp))
             HorizontalDivider()
@@ -253,8 +325,8 @@ private fun LyricsPane(content: SessionContent, actions: SessionActions, modifie
     if (lines.isEmpty()) return PageView(content.lyrics, modifier)
     Column(modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-            ViewChoice("Karaoke", content.karaoke, index = 0) { actions.onShowKaraoke(true) }
-            ViewChoice("Page", !content.karaoke, index = 1) { actions.onShowKaraoke(false) }
+            Choice("Karaoke", content.karaoke, index = 0, count = 2) { actions.onShowKaraoke(true) }
+            Choice("Page", !content.karaoke, index = 1, count = 2) { actions.onShowKaraoke(false) }
         }
         if (content.karaoke) {
             KaraokeView(
@@ -267,24 +339,59 @@ private fun LyricsPane(content: SessionContent, actions: SessionActions, modifie
     }
 }
 
-/** One half of the Karaoke | Page switch: 6 dp corners, the chosen half in muted gold, no check mark. */
+/** One segment of a switch (Karaoke | Page, the Backing Audio): 6 dp corners, the chosen one in muted gold, no check mark. */
 @Composable
-private fun SingleChoiceSegmentedButtonRowScope.ViewChoice(label: String, selected: Boolean, index: Int, onClick: () -> Unit) {
+private fun SingleChoiceSegmentedButtonRowScope.Choice(
+    label: String,
+    selected: Boolean,
+    index: Int,
+    count: Int,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
     SegmentedButton(
         selected = selected,
         onClick = onClick,
-        shape = SegmentedButtonDefaults.itemShape(index, 2, baseShape = MaterialTheme.shapes.extraSmall),
+        enabled = enabled,
+        shape = SegmentedButtonDefaults.itemShape(index, count, baseShape = MaterialTheme.shapes.extraSmall),
         icon = {},
     ) { Text(label) }
 }
 
+/** The Track's title, with its artist below if known. */
+@Composable
+private fun TrackTitle(track: Track?) {
+    Column {
+        Text(track?.title.orEmpty(), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        track?.artist?.let {
+            Text(
+                it,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+/** The lower half, in the order of #34: status, Lyrics, Backing Audio, the Session, Vocal-Free. */
 @Composable
 private fun SessionControls(openError: String?, content: SessionContent, actions: SessionActions) {
+    val track = content.track ?: return LinearProgressIndicator(Modifier.fillMaxWidth())
+    PipelineStatus(track.pipeline, actions.onRetry)
+    LyricsStatus(content.lyrics, actions.onConfirmLyrics, actions.onChooseLyrics)
     when {
-        openError != null -> Text("Can't start a Session: $openError", color = MaterialTheme.colorScheme.error)
-        content.backing == null -> LinearProgressIndicator(Modifier.fillMaxWidth())
+        openError != null -> Text("Can't play this Track: $openError", color = MaterialTheme.colorScheme.error)
+        // Nothing to play until the Original Audio is stored; the Session opens by itself then (ADR 10).
+        !track.hasOriginalAudio -> Unit
+        content.backing == null -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Preparing audio… ${(content.loadProgress * 100).toInt()} %", style = MaterialTheme.typography.bodyMedium)
+            LinearProgressIndicator(progress = { content.loadProgress }, modifier = Modifier.fillMaxWidth())
+        }
         else -> {
-            BackingLine(content.backing)
+            // A Vocal-Free Track has no Instrumental: it always plays its Original Audio (ADR 14).
+            if (!track.vocalFree) BackingChoiceRow(track, content.backing, actions.onChooseBacking)
             Position(content.state, content.playback, actions.onSeek)
             Transport(content.state, content.playback, content.reviewBackingDb, actions)
             TransposeControl(content.transpose, content.state, actions.onTranspose)
@@ -293,15 +400,125 @@ private fun SessionControls(openError: String?, content: SessionContent, actions
             Takes(content.takes, content.state, actions)
         }
     }
+    VocalFreeToggle(track.vocalFree, actions.onVocalFree)
 }
 
+/**
+ * Instrumental | Original Audio, kept for the Track. The Instrumental can't be chosen until vocal
+ * removal is done; the Original Audio plays meanwhile.
+ */
 @Composable
-private fun BackingLine(backing: BackingAudio) {
-    val text = when (backing) {
-        BackingAudio.OriginalAudio -> "Singing over the Original Audio. The Instrumental replaces it once vocal removal is done."
-        is BackingAudio.Instrumental -> "Singing over the Instrumental."
+private fun BackingChoiceRow(track: Track, playing: BackingAudio, onChoose: (BackingChoice) -> Unit) {
+    val available = track.instrumentalModel != null
+    val shown = if (available) track.backingChoice else BackingChoice.OriginalAudio
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("Sing over", style = rowLabel())
+        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+            Choice("Instrumental", shown == BackingChoice.Instrumental, index = 0, count = 2, enabled = available) {
+                onChoose(BackingChoice.Instrumental)
+            }
+            Choice("Original Audio", shown == BackingChoice.OriginalAudio, index = 1, count = 2) {
+                onChoose(BackingChoice.OriginalAudio)
+            }
+        }
+        val playingShown = (playing is BackingAudio.Instrumental) == (shown == BackingChoice.Instrumental)
+        when {
+            !available -> Text("The Instrumental can be chosen once vocal removal is done.", style = MaterialTheme.typography.bodySmall, color = muted)
+            // Never under a Take being recorded, reviewed or played back (ADR 20).
+            !playingShown -> Text("Switches once this Take is done.", style = MaterialTheme.typography.bodySmall, color = muted)
+        }
     }
-    Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+/** Where the Track is in the Track Pipeline (ADR 10); what plays is the Backing Audio choice's business. */
+@Composable
+private fun PipelineStatus(pipeline: TrackPipelineState, onRetry: () -> Unit) {
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    when (pipeline) {
+        is TrackPipelineState.Separating -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(pipeline.label(), style = MaterialTheme.typography.bodyMedium)
+            val progress = pipeline.progress
+            if (progress == null) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            } else {
+                LinearProgressIndicator(progress = { progress.fraction }, modifier = Modifier.fillMaxWidth())
+            }
+        }
+        is TrackPipelineState.Failed -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("${pipeline.label()}: ${pipeline.reason}", color = CroonvoxTheme.colors.record, style = MaterialTheme.typography.bodyMedium)
+            NeutralOutlinedButton("Retry", onRetry, Modifier.height(44.dp))
+        }
+        is TrackPipelineState.Downloading -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(pipeline.label(), style = MaterialTheme.typography.bodyMedium)
+            pipeline.retryReason?.let { Text("Last try: $it", style = MaterialTheme.typography.bodySmall, color = muted) }
+            val progress = pipeline.progress
+            if (progress == null) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            } else {
+                LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
+            }
+        }
+        is TrackPipelineState.Ready -> Unit
+        // Opening the Track brings deleted stems back, so this shows only for a moment (ADR 17).
+        TrackPipelineState.Added, TrackPipelineState.Downloaded, is TrackPipelineState.StemsDeleted ->
+            Text(pipeline.label(), style = MaterialTheme.typography.bodySmall, color = muted)
+    }
+}
+
+/** Which Lyrics the Track has, and how to confirm or change them (ADR 6). */
+@Composable
+private fun LyricsStatus(lyrics: TrackLyrics?, onConfirm: () -> Unit, onChoose: () -> Unit) {
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    val small = MaterialTheme.typography.bodySmall
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("Lyrics", style = MaterialTheme.typography.labelLarge, color = muted)
+        when (lyrics) {
+            null, TrackLyrics.Searching -> {
+                // Waits for a network; the user needn't.
+                Text("Searching…", style = small, color = muted)
+                NeutralOutlinedButton("Search", onChoose, Modifier.height(44.dp))
+            }
+            is TrackLyrics.Suggested -> {
+                Text("Suggested: ${lyrics.lyrics.name()}", style = rowLabel())
+                Text(lyrics.lyrics.details(), style = small, color = muted)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // Gold text, not a gold surface: Keep is the screen's one gold surface.
+                    OutlinedButton(onClick = onConfirm, shape = CroonvoxButtonShape, modifier = Modifier.height(44.dp)) { Text("Confirm") }
+                    NeutralOutlinedButton("Choose another", onChoose, Modifier.height(44.dp))
+                }
+            }
+            is TrackLyrics.Confirmed -> {
+                Text(lyrics.lyrics.name(), style = rowLabel())
+                Text(lyrics.lyrics.details(), style = small, color = muted)
+                NeutralOutlinedButton("Change", onChoose, Modifier.height(44.dp))
+            }
+            is TrackLyrics.NotFound -> {
+                Text("No Lyrics found for \"${lyrics.query.title}\".", style = small, color = muted)
+                NeutralOutlinedButton("Search", onChoose, Modifier.height(44.dp))
+            }
+            is TrackLyrics.Failed -> {
+                Text("Lyrics search failed: ${lyrics.reason}", style = small, color = CroonvoxTheme.colors.record)
+                NeutralOutlinedButton("Search", onChoose, Modifier.height(44.dp))
+            }
+        }
+    }
+}
+
+/** The Vocal-Free toggle (GLOSSARY: Vocal-Free, ADR 14). */
+@Composable
+private fun VocalFreeToggle(vocalFree: Boolean, onChange: (Boolean) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text("No vocals (Vocal-Free)", style = rowLabel())
+            Text(
+                "For audio without a lead vocal, e.g. a karaoke version: vocal removal is skipped and you sing over the original audio.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Switch(checked = vocalFree, onCheckedChange = onChange)
+    }
 }
 
 @Composable
@@ -769,12 +986,16 @@ private fun ReviewPreview() {
     val kept = Take(TakeId("1"), TrackId(SourceId("local"), "x"), "Take 1", 0, 960_000, 48_000, OutputRoute.Wired, 4_000, Transpose(2), 0)
     CroonvoxTheme {
         SessionScreen(
-            title = "Fly Me to the Moon",
             openError = null,
             snackbar = remember { SnackbarHostState() },
             content = SessionContent(
+                track = Track(
+                    TrackId(SourceId("local"), "x"), "Fly Me to the Moon", "Frank Sinatra", 148_000,
+                    TrackPipelineState.Ready(SeparationModelId("fast")), backingChoice = BackingChoice.OriginalAudio,
+                ),
+                loadProgress = 1f,
                 state = SessionState.Review(take, Transpose(-2)),
-                backing = BackingAudio.OriginalAudio,
+                backing = BackingAudio.Instrumental(SeparationModelId("fast")),
                 playback = Playback(null, playing = true, positionMs = 32_000, durationMs = 180_000, playingTake = true),
                 input = InputLevel(enabled = true, device = InputDevice.BuiltIn, peak = 0.6f, clipping = true),
                 inputGainDb = 6f,

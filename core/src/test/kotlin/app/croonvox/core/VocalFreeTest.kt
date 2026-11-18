@@ -10,11 +10,15 @@ import app.croonvox.core.model.TrackPipelineState
 import app.croonvox.core.pipeline.TrackPipeline
 import app.croonvox.core.pipeline.SeparateTrack
 import app.croonvox.core.pipeline.VocalFreeToggle
-import app.croonvox.core.player.TrackPlayer
+import app.croonvox.core.session.BackingAudio
+import app.croonvox.core.session.Sessions
+import app.croonvox.core.session.backingAudio
 import app.croonvox.core.port.SeparationProgress
 import app.croonvox.core.testing.FakeAudioEngine
 import app.croonvox.core.testing.FakePipelineJobs
 import app.croonvox.core.testing.FakeSeparator
+import app.croonvox.core.testing.InMemorySettingsRepository
+import app.croonvox.core.testing.InMemoryTakeRepository
 import app.croonvox.core.testing.InMemoryTrackFiles
 import app.croonvox.core.testing.InMemoryTrackRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -86,7 +90,7 @@ class VocalFreeTest {
         val engine = FakeAudioEngine()
 
         vocalFree.mark(id)
-        TrackPlayer(tracks, files, engine).open(id)
+        Sessions(tracks, InMemoryTakeRepository(), files, engine, InMemorySettingsRepository()).open(id, backgroundScope)
 
         assertEquals(TrackPipelineState.Ready(model = null), tracks.get(id)?.pipeline)
         assertEquals(files.originalAudio(id), engine.playback.value.loaded)
@@ -108,19 +112,18 @@ class VocalFreeTest {
     @Test
     fun `unmarking a Ready Track separates it with the default model, then it plays the Instrumental`() = runTest {
         addTrack(TrackPipelineState.Ready(model = null), vocalFree = true)
-        val player = TrackPlayer(tracks, files, FakeAudioEngine())
 
         vocalFree.unmark(id)
 
         assertEquals(false, tracks.get(id)?.vocalFree)
         assertEquals(TrackPipelineState.Separating(FAST), tracks.get(id)?.pipeline)
         assertEquals(listOf(FakePipelineJobs.Separation(id, FAST)), jobs.separations)
-        assertEquals(files.originalAudio(id), player.audioOf(tracks.get(id)!!))
+        assertEquals(BackingAudio.OriginalAudio, tracks.get(id)!!.backingAudio())
 
         SeparateTrack(tracks, files, FakeSeparator())(id, FAST) // the queued job runs
 
         assertEquals(TrackPipelineState.Ready(FAST), tracks.get(id)?.pipeline)
-        assertEquals(files.stems(id, FAST).instrumental, player.audioOf(tracks.get(id)!!))
+        assertEquals(BackingAudio.Instrumental(FAST), tracks.get(id)!!.backingAudio())
     }
 
     @Test

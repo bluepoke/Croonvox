@@ -70,7 +70,12 @@ class LibraryTest {
         val files = InMemoryTrackFiles()
         val sessions = Sessions(tracks, takes, files, FakeAudioEngine(), InMemorySettingsRepository(), clock = { SUNG_AT })
 
-        sessions.open(sung.id, backgroundScope).close()
+        sessions.open(sung.id, backgroundScope).apply {
+            record() // sung: a Take started recording
+            stop()
+            discard()
+            close()
+        }
 
         val entries = library.entries().first().associateBy { it.track.id }
         assertEquals(LibraryEntry(tracks.get(sung.id)!!, takeCount = 2), entries[sung.id])

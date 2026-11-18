@@ -10,7 +10,6 @@ import app.croonvox.core.model.Track
 import app.croonvox.core.model.TrackId
 import app.croonvox.core.model.TrackPipelineState
 import app.croonvox.core.pipeline.TrackPipeline
-import app.croonvox.core.player.TrackPlayer
 import app.croonvox.core.session.BackingAudio
 import app.croonvox.core.session.Sessions
 import app.croonvox.core.testing.FakeAudioEngine
@@ -119,29 +118,16 @@ class TrackPipelineTest {
         tracks.updatePipeline(track.id, TrackPipelineState.StemsDeleted(best))
         startPipeline()
         assertEquals(emptyList(), jobs.separations)
-
-        val engine = FakeAudioEngine()
-        TrackPlayer(tracks, files, engine).open(track.id)
-
-        // The Original Audio plays until the stems are back.
-        assertEquals(files.originalAudio(track.id), engine.playback.value.loaded)
-        assertEquals(TrackPipelineState.Separating(best), tracks.get(track.id)?.pipeline)
-        assertEquals(listOf(FakePipelineJobs.Separation(track.id, best)), jobs.separations)
-    }
-
-    @Test
-    fun `opening a Session on a Track whose stems were deleted brings them back too`() = runTest {
-        val track = import(FakeLocalFile(displayName = "song.mp3", content = "audio-1"))
-        tracks.updatePipeline(track.id, TrackPipelineState.StemsDeleted(fast))
-        startPipeline()
         val engine = FakeAudioEngine()
         val sessions = Sessions(tracks, InMemoryTakeRepository(), files, engine, InMemorySettingsRepository())
 
         val session = sessions.open(track.id, backgroundScope)
 
+        // The Original Audio plays until the stems are back.
         assertEquals(BackingAudio.OriginalAudio, session.backing.value)
-        assertEquals(TrackPipelineState.Separating(fast), tracks.get(track.id)?.pipeline)
-        assertEquals(listOf(FakePipelineJobs.Separation(track.id, fast)), jobs.separations)
+        assertEquals(files.originalAudio(track.id), engine.playback.value.loaded)
+        assertEquals(TrackPipelineState.Separating(best), tracks.get(track.id)?.pipeline)
+        assertEquals(listOf(FakePipelineJobs.Separation(track.id, best)), jobs.separations)
     }
 
     @Test

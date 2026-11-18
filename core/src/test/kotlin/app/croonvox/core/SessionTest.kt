@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package app.croonvox.core
 
+import app.croonvox.core.model.BackingChoice
 import app.croonvox.core.model.InputDevice
 import app.croonvox.core.model.OutputRoute
 import app.croonvox.core.model.SeparationModelId
@@ -9,7 +10,7 @@ import app.croonvox.core.model.Track
 import app.croonvox.core.model.TrackId
 import app.croonvox.core.model.TrackPipelineState
 import app.croonvox.core.model.Transpose
-import app.croonvox.core.player.NotPlayableYet
+import app.croonvox.core.session.NotPlayableYet
 import app.croonvox.core.session.BackingAudio
 import app.croonvox.core.session.Session
 import app.croonvox.core.session.SessionState
@@ -476,6 +477,155 @@ class SessionTest {
 
         assertEquals(SessionState.Recording(15_000, Transpose(-2)), session.state.value)
         assertEquals(Transpose(-2), engine.audibleTranspose)
+    }
+
+    @Test
+    fun `choosing the Original Audio during free playback switches at the same position, still playing`() = runTest {
+        addTrack(TrackPipelineState.Ready(MODEL))
+        val session = sessions.open(trackId, backgroundScope)
+        session.seekTo(42_000)
+        session.play()
+
+        assertTrue(session.chooseBacking(BackingChoice.OriginalAudio))
+        runCurrent()
+
+        assertEquals(BackingAudio.OriginalAudio, session.backing.value)
+        assertEquals(files.originalAudio(trackId), engine.playback.value.loaded)
+        assertEquals(42_000, engine.playback.value.positionMs)
+        assertTrue(engine.playback.value.playing)
+    }
+
+    @Test
+    fun `the Backing Audio choice is kept for the Track and used when it is opened again`() = runTest {
+        addTrack(TrackPipelineState.Ready(MODEL))
+        sessions.open(trackId, backgroundScope).apply {
+            chooseBacking(BackingChoice.OriginalAudio)
+            close()
+        }
+
+        val again = sessions.open(trackId, backgroundScope)
+
+        assertEquals(BackingChoice.OriginalAudio, tracks.get(trackId)?.backingChoice)
+        assertEquals(BackingAudio.OriginalAudio, again.backing.value)
+        assertEquals(files.originalAudio(trackId), engine.playback.value.loaded)
+    }
+
+    @Test
+    fun `a Backing Audio chosen while a Take is recorded is loaded only once Review ends`() = runTest {
+        addTrack(TrackPipelineState.Ready(MODEL))
+        val session = sessions.open(trackId, backgroundScope)
+        session.record()
+        engine.advance(5_000)
+
+        session.chooseBacking(BackingChoice.OriginalAudio)
+        runCurrent()
+        assertEquals(BackingAudio.Instrumental(MODEL), session.backing.value)
+        session.stop()
+        runCurrent()
+        assertEquals(BackingAudio.Instrumental(MODEL), session.backing.value)
+
+        session.discard()
+        runCurrent()
+
+        assertEquals(BackingAudio.OriginalAudio, session.backing.value)
+        assertEquals(files.originalAudio(trackId), engine.playback.value.loaded)
+    }
+
+    @Test
+    fun `a Backing Audio chosen while a kept Take plays is loaded once its playback ends`() = runTest {
+        addTrack(TrackPipelineState.Ready(MODEL))
+        val session = sessions.open(trackId, backgroundScope)
+        recordTake(session, fromMs = 10_000, lengthMs = 2_000)
+        val kept = session.keep()
+        assertTrue(session.play(kept.id))
+
+        session.chooseBacking(BackingChoice.OriginalAudio)
+        runCurrent()
+        assertEquals(BackingAudio.Instrumental(MODEL), session.backing.value)
+        engine.advance(2_000)
+        runCurrent()
+
+        assertEquals(SessionState.Idle, session.state.value)
+        assertEquals(BackingAudio.OriginalAudio, session.backing.value)
+        assertEquals(files.originalAudio(trackId), engine.playback.value.loaded)
+    }
+
+    @Test
+    fun `the Instrumental can't be chosen before the Track has one`() = runTest {
+        addTrack(TrackPipelineState.Separating(MODEL))
+        val session = sessions.open(trackId, backgroundScope)
+        session.chooseBacking(BackingChoice.OriginalAudio)
+
+        assertFalse(session.chooseBacking(BackingChoice.Instrumental))
+
+        assertEquals(BackingChoice.OriginalAudio, tracks.get(trackId)?.backingChoice)
+        assertEquals(BackingAudio.OriginalAudio, session.backing.value)
+    }
+
+    @Test
+    fun `when Separation finishes, a Session whose choice is the Original Audio stays on it`() = runTest {
+        val session = openDownloaded()
+        session.chooseBacking(BackingChoice.OriginalAudio)
+        session.play()
+
+        tracks.updatePipeline(trackId, TrackPipelineState.Ready(MODEL))
+        runCurrent()
+
+        assertEquals(BackingAudio.OriginalAudio, session.backing.value)
+        assertEquals(files.originalAudio(trackId), engine.playback.value.loaded)
+        assertTrue(engine.playback.value.playing)
+    }
+
+    @Test
+    fun `a Vocal-Free Track sings over its Original Audio, whatever the choice`() = runTest {
+        tracks.addIfAbsent(
+            Track(trackId, "Fly Me to the Moon (Karaoke)", null, SONG_MS, TrackPipelineState.Ready(model = null), vocalFree = true),
+        )
+        val session = sessions.open(trackId, backgroundScope)
+
+        assertEquals(BackingChoice.Instrumental, tracks.get(trackId)?.backingChoice)
+        assertEquals(BackingAudio.OriginalAudio, session.backing.value)
+        assertFalse(session.chooseBacking(BackingChoice.Instrumental))
+    }
+
+    @Test
+    fun `opening another Track closes the Session before, and closing that one later leaves the new Session alone`() = runTest {
+        addTrack(TrackPipelineState.Downloaded)
+        val otherId = TrackId(SourceId("fake"), "v2")
+        tracks.addIfAbsent(Track(otherId, "Blue Moon", null, SONG_MS, TrackPipelineState.Downloaded))
+        val first = sessions.open(trackId, backgroundScope)
+        first.play()
+
+        sessions.open(otherId, backgroundScope)
+        // e.g. the first Track's screen is torn down after the second one opened
+        first.close()
+        tracks.updatePipeline(trackId, TrackPipelineState.Ready(MODEL))
+        runCurrent()
+
+        assertTrue(engine.inSession)
+        assertEquals(files.originalAudio(otherId), engine.playback.value.loaded)
+        assertFalse(engine.playback.value.playing)
+    }
+
+    @Test
+    fun `opening a Session reports how far the Backing Audio is prepared, up to completion`() = runTest {
+        addTrack(TrackPipelineState.Downloaded)
+        val progress = mutableListOf<Float>()
+
+        sessions.open(trackId, backgroundScope) { progress += it }
+
+        assertEquals(1f, progress.last())
+        assertEquals(progress.sorted(), progress)
+    }
+
+    @Test
+    fun `the Track counts as sung once a Take starts recording, not when the Session opens`() = runTest {
+        val session = openDownloaded()
+        assertNull(tracks.get(trackId)?.lastSessionAt)
+
+        session.record()
+
+        assertEquals(NOW, tracks.get(trackId)?.lastSessionAt)
     }
 
     private suspend fun recordTake(session: Session, fromMs: Long, lengthMs: Long) {
