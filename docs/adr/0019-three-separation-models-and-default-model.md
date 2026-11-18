@@ -23,6 +23,14 @@ ADR 15 also says the model picker exists, but not which model it starts on, or t
   - If the default model isn't downloaded yet, the usual download consent comes first (size shown). If its license is withdrawn or it leaves the catalogue, the default falls back to Fast.
 - **Model picker** keeps ADR 15's rules: for each model it shows the expected duration for the Track and whether it keeps or removes backing vocals. Medium and Fast keep them, Best removes them.
 
+## Note: first implementation (#17, 2026-11-18)
+- **Interim download, against the license gate.** Medium and Best are offered in every build before their weights are licensed. Until the project hosts the files (#21), both are downloaded from the UVR model repository (`TRvlvr/model_repo`, release `all_public_uvr_models`), pinned by SHA-256, as Fast is from the sherpa-onnx release. This is a deliberate exception to the license gate above and to ADR 15's distribution rule, decided by the project owner. It has to be resolved before a public release: by the license from UVR #2444, or by taking the models out of the catalogue.
+- **The picked model stays on the Track** (`Track.separationModel`): the one picked in the import sheet, or later when re-separating or unmarking Vocal-Free. A retry after a failed Separation uses it. Tracks added before #17 have none and get the Default Separation Model.
+- **Download consent:** a model not yet installed shows its size in the picker, a note under it, and a confirm button that reads "Download 59 MB and add" (or "… and re-separate"). Confirming is the consent. Picking the default in Settings asks nothing; the consent comes when the model is first used.
+- **Expected duration** is the Track's length times the model's RTF on the weak device (0.16, 1.34, 3.4), or relative to the length when that is unknown (a local file before import).
+- **Re-separating** keeps the previous model's stems until they are deleted on the storage screen. The Original Audio plays meanwhile, as for Stems Deleted (ADR 17). A Separation still running is replaced (ADR 10, #28).
+- **Mixes** don't exist yet (ADR 7). Switching a Mix to a re-separated Instrumental lands with the Mix ticket.
+
 ## Considered Options
 - **Keep two tiers (ADR 15).** Rejected: the jump from Fast to Best is about 20× in time, with nothing in between, and only Best removes backing vocals, which isn't always wanted.
 - **Inst HQ 3 as Medium.** Rejected: it is slower than Inst HQ 4 at the same rating.

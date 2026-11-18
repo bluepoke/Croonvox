@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package app.croonvox.core
 
-import app.croonvox.core.library.AddSharedLink
+import app.croonvox.core.library.LookUpSharedLink
 import app.croonvox.core.library.Library
 import app.croonvox.core.model.SourceId
-import app.croonvox.core.model.TrackPipelineState
 import app.croonvox.core.testing.FakeSource
 import app.croonvox.core.testing.InMemoryTakeRepository
 import app.croonvox.core.testing.InMemoryTrackRepository
@@ -14,30 +13,26 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
-class AddSharedLinkTest {
+class LookUpSharedLinkTest {
     private val tracks = InMemoryTrackRepository()
     private val library = Library(tracks, InMemoryTakeRepository())
     private val youtube = FakeSource(SourceId("youtube"))
     private val soundcloud = FakeSource(SourceId("soundcloud"))
-    private val addLink = AddSharedLink(listOf(youtube, soundcloud), library)
+    private val lookUp = LookUpSharedLink(listOf(youtube, soundcloud))
 
     @Test
-    fun `a shared link adds the item of the Source it belongs to, once`() = runTest {
+    fun `a shared link finds the item of the Source it belongs to, to be added like a search result`() = runTest {
         val song = soundcloud.add("rolling", "Rolling in the Deep", artist = "Adele", durationMs = 228_000)
 
-        val track = addLink(soundcloud.urlOf("rolling"))
-        val again = addLink(soundcloud.urlOf("rolling"))
+        val found = lookUp(soundcloud.urlOf("rolling"))
 
-        assertEquals(song.id, track?.id)
-        assertEquals("Rolling in the Deep", track?.title)
-        assertEquals(TrackPipelineState.Added, track?.pipeline)
-        assertEquals(track, again)
-        assertEquals(listOf(track), library.tracks().first())
+        assertEquals(song, found)
+        // Nothing is added until the user confirms the import sheet.
+        assertEquals(emptyList(), library.tracks().first())
     }
 
     @Test
-    fun `a link no Source knows adds nothing`() = runTest {
-        assertNull(addLink("https://example.com/some/page"))
-        assertEquals(emptyList(), library.tracks().first())
+    fun `a link no Source knows finds nothing`() = runTest {
+        assertNull(lookUp("https://example.com/some/page"))
     }
 }

@@ -52,6 +52,15 @@ class TrackEntityTest {
     }
 
     @Test
+    fun `the Separation Model picked for a Track is stored and read back, and may be unset`() {
+        for (picked in listOf(SeparationModelId("uvr-mdx-inst-hq4"), null)) {
+            val track = track(TrackPipelineState.Added).copy(separationModel = picked)
+
+            assertEquals(track, track.toEntity(addedAt = 1).toTrack(), "$picked")
+        }
+    }
+
+    @Test
     fun `states stored by earlier versions still read`() {
         val earlier = track(TrackPipelineState.Ready(model)).toEntity(addedAt = 1)
             .copy(pipelineState = "ready:fast", pipelineProgress = null, pipelineFailure = null)

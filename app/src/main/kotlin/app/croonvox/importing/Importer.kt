@@ -5,6 +5,7 @@ import android.content.ContentResolver
 import android.net.Uri
 import app.croonvox.core.library.ImportLocalFile
 import app.croonvox.core.library.TrackFiles
+import app.croonvox.core.model.SeparationModelId
 import app.croonvox.core.model.TrackId
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -33,8 +34,8 @@ class Importer(
     private val resolver: ContentResolver,
 ) {
     sealed interface Result {
-        /** The new Track, or the existing one for content imported before; [shared] if it came from a share. */
-        data class Imported(val id: TrackId, val shared: Boolean) : Result
+        /** The new Track, or the existing one for content imported before. */
+        data class Imported(val id: TrackId) : Result
         data class Failed(val reason: String) : Result
     }
 
@@ -51,12 +52,12 @@ class Importer(
         scope.launch(queue) { files.discardAbandonedStaging() }
     }
 
-    /** Imports [uri], marked [vocalFree] if asked (ADR 14); [shared] if it was shared from another app. */
-    fun import(uri: Uri, vocalFree: Boolean = false, shared: Boolean = false) {
+    /** Imports [uri] as the import sheet asked: marked [vocalFree] (ADR 14), or to be separated with [model] (ADR 19). */
+    fun import(uri: Uri, vocalFree: Boolean, model: SeparationModelId?) {
         running.update { it + 1 }
         scope.launch(queue) {
             val result = try {
-                Result.Imported(importLocalFile(UriLocalFile(resolver, uri), vocalFree).id, shared)
+                Result.Imported(importLocalFile(UriLocalFile(resolver, uri), vocalFree, model).id)
             } catch (e: Exception) {
                 Result.Failed(e.message ?: e::class.simpleName ?: "unknown error")
             } finally {

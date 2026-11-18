@@ -9,6 +9,7 @@ import app.croonvox.core.lyrics.LyricsRepository
 import app.croonvox.core.lyrics.MatchLyrics
 import app.croonvox.core.lyrics.TrackLyrics
 import app.croonvox.core.model.BackingChoice
+import app.croonvox.core.model.SeparationModelId
 import app.croonvox.core.model.Take
 import app.croonvox.core.model.TakeId
 import app.croonvox.core.model.Track
@@ -23,6 +24,8 @@ import app.croonvox.core.session.MicrophoneUnavailable
 import app.croonvox.core.session.Session
 import app.croonvox.core.session.SessionState
 import app.croonvox.core.session.Sessions
+import app.croonvox.separating.ModelChoices
+import app.croonvox.separating.ModelOption
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -50,6 +53,7 @@ class SessionViewModel(
     private val match: MatchLyrics,
     private val lyricsOffset: LyricsOffset,
     private val vocalFree: VocalFreeToggle,
+    private val choices: ModelChoices,
 ) : ViewModel() {
     /** The Track as it is now: Track Pipeline, Vocal-Free, Backing Audio choice. */
     val track: StateFlow<Track?> = tracks.observe(id).stateIn(viewModelScope, SharingStarted.Eagerly, null)
@@ -91,12 +95,46 @@ class SessionViewModel(
     /** Bytes of stems that marking the Track Vocal-Free would delete, while waiting for the user to confirm. */
     val confirmVocalFree: StateFlow<Long?> = _confirmVocalFree
 
-    /** The Vocal-Free toggle (ADR 14): turning it on asks first if stems would be deleted. */
+    /**
+     * The Vocal-Free toggle (ADR 14): turning it on asks first if stems would be deleted; turning it
+     * off asks which model removes the vocals (ADR 19).
+     */
     fun setVocalFree(on: Boolean) {
         viewModelScope.launch {
-            if (!on) return@launch vocalFree.unmark(id)
+            if (!on) return@launch openModelPick(ModelPick.Purpose.Unmark)
             val bytes = vocalFree.stemBytes(id)
             if (bytes > 0) _confirmVocalFree.value = bytes else vocalFree.mark(id)
+        }
+    }
+
+    private val _modelPick = MutableStateFlow<ModelPick?>(null)
+
+    /** The model picker while it is open, with the Default Separation Model pre-selected (ADR 19). */
+    val modelPick: StateFlow<ModelPick?> = _modelPick
+
+    /** Opens the model picker to separate the Track again (ADR 19). */
+    fun startReseparating() {
+        viewModelScope.launch { openModelPick(ModelPick.Purpose.Reseparate) }
+    }
+
+    private suspend fun openModelPick(purpose: ModelPick.Purpose) {
+        _modelPick.value = ModelPick(purpose, choices.options(), choices.default.get())
+    }
+
+    fun pickModel(model: SeparationModelId) {
+        _modelPick.value = _modelPick.value?.copy(selected = model)
+    }
+
+    /** Confirms the picked model: confirming also consents to downloading it, if it needs that. */
+    fun confirmModelPick(confirmed: Boolean) {
+        val pick = _modelPick.value ?: return
+        _modelPick.value = null
+        if (!confirmed) return
+        viewModelScope.launch {
+            when (pick.purpose) {
+                ModelPick.Purpose.Reseparate -> pipeline.reseparate(id, pick.selected)
+                ModelPick.Purpose.Unmark -> vocalFree.unmark(id, pick.selected)
+            }
         }
     }
 
@@ -215,4 +253,9 @@ class SessionViewModel(
         // Does nothing if the next Track's Session has closed it already.
         session.value?.close()
     }
+}
+
+/** The model picker on the Track screen (ADR 19): for re-separating, or for unmarking Vocal-Free. */
+data class ModelPick(val purpose: Purpose, val options: List<ModelOption>, val selected: SeparationModelId) {
+    enum class Purpose { Reseparate, Unmark }
 }

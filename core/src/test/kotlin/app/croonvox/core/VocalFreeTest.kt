@@ -7,6 +7,7 @@ import app.croonvox.core.model.SourceId
 import app.croonvox.core.model.Track
 import app.croonvox.core.model.TrackId
 import app.croonvox.core.model.TrackPipelineState
+import app.croonvox.core.pipeline.DefaultSeparationModel
 import app.croonvox.core.pipeline.TrackPipeline
 import app.croonvox.core.pipeline.SeparateTrack
 import app.croonvox.core.pipeline.VocalFreeToggle
@@ -34,8 +35,8 @@ class VocalFreeTest {
     private val tracks = InMemoryTrackRepository()
     private val files = InMemoryTrackFiles()
     private val jobs = FakePipelineJobs()
-    private val vocalFree = VocalFreeToggle(tracks, files, jobs, defaultModel = FAST, models = listOf(FAST, BEST))
-    private val pipeline = TrackPipeline(tracks, jobs, defaultModel = FAST)
+    private val vocalFree = VocalFreeToggle(tracks, files, jobs, models = listOf(FAST, BEST))
+    private val pipeline = TrackPipeline(tracks, jobs, DefaultSeparationModel(InMemorySettingsRepository(), listOf(FAST, BEST), fallback = FAST))
     private val id = TrackId(SourceId.Local, "abc")
 
     private suspend fun addTrack(pipeline: TrackPipelineState, vocalFree: Boolean = false) =
@@ -110,20 +111,20 @@ class VocalFreeTest {
     }
 
     @Test
-    fun `unmarking a Ready Track separates it with the default model, then it plays the Instrumental`() = runTest {
+    fun `unmarking a Ready Track separates it with the model picked for it, then it plays the Instrumental`() = runTest {
         addTrack(TrackPipelineState.Ready(model = null), vocalFree = true)
 
-        vocalFree.unmark(id)
+        vocalFree.unmark(id, BEST)
 
         assertEquals(false, tracks.get(id)?.vocalFree)
-        assertEquals(TrackPipelineState.Separating(FAST), tracks.get(id)?.pipeline)
-        assertEquals(listOf(FakePipelineJobs.Separation(id, FAST)), jobs.separations)
+        assertEquals(TrackPipelineState.Separating(BEST), tracks.get(id)?.pipeline)
+        assertEquals(listOf(FakePipelineJobs.Separation(id, BEST)), jobs.separations)
         assertEquals(BackingAudio.OriginalAudio, tracks.get(id)!!.backingAudio())
 
-        SeparateTrack(tracks, files, FakeSeparator())(id, FAST) // the queued job runs
+        SeparateTrack(tracks, files, FakeSeparator())(id, BEST) // the queued job runs
 
-        assertEquals(TrackPipelineState.Ready(FAST), tracks.get(id)?.pipeline)
-        assertEquals(BackingAudio.Instrumental(FAST), tracks.get(id)!!.backingAudio())
+        assertEquals(TrackPipelineState.Ready(BEST), tracks.get(id)?.pipeline)
+        assertEquals(BackingAudio.Instrumental(BEST), tracks.get(id)!!.backingAudio())
     }
 
     @Test
@@ -131,7 +132,7 @@ class VocalFreeTest {
         addTrack(TrackPipelineState.Separating(FAST))
         // The user turns the toggle off again while marking still waits for the old job to stop.
         jobs.onCancelSeparation = {
-            vocalFree.unmark(id)
+            vocalFree.unmark(id, FAST)
             files.store(files.separationCheckpoint(id, FAST), 5_000_000) // the new Separation's work
         }
 

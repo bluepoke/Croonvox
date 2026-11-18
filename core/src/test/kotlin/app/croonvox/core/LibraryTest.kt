@@ -32,6 +32,15 @@ class LibraryTest {
     }
 
     @Test
+    fun `adding a search result keeps the Separation Model chosen for it`() = runTest {
+        val best = SeparationModelId("best")
+
+        val track = library.add(source.search("fly me").single(), separationModel = best)
+
+        assertEquals(best, tracks.get(track.id)?.separationModel)
+    }
+
+    @Test
     fun `a new Library has no Tracks`() = runTest {
         assertEquals(emptyList(), library.tracks().first())
     }

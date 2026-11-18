@@ -14,8 +14,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -28,8 +30,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -46,12 +48,18 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import app.croonvox.core.library.Library
+import app.croonvox.core.model.SeparationModelId
 import app.croonvox.core.model.SourceId
 import app.croonvox.core.model.TrackId
 import app.croonvox.core.port.MediaUnavailable
 import app.croonvox.core.port.Source
 import app.croonvox.core.port.SourceCandidate
+import app.croonvox.separating.ModelChoices
 import app.croonvox.ui.formatTime
+import app.croonvox.ui.models.ImportChoice
+import app.croonvox.ui.models.ImportOptions
+import app.croonvox.ui.models.importLabel
+import app.croonvox.ui.models.rememberImportChoice
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -132,18 +140,21 @@ class SearchViewModel(private val sources: List<Source>, private val library: Li
     /** The app went to the background: a preview doesn't play on there. */
     fun onBackground() = player.pause()
 
-    /** Adds [candidate], marked Vocal-Free if [vocalFree] (ADR 14); an existing Track opens unchanged. */
-    fun add(candidate: SourceCandidate, vocalFree: Boolean, then: (TrackId) -> Unit) {
+    /**
+     * Adds [candidate], marked Vocal-Free if [vocalFree] (ADR 14), else to be separated with [model]
+     * (ADR 19); an existing Track opens unchanged.
+     */
+    fun add(candidate: SourceCandidate, vocalFree: Boolean, model: SeparationModelId?, then: (TrackId) -> Unit) {
         resolving?.cancel()
         player.stop()
-        viewModelScope.launch { then(library.add(candidate, vocalFree).id) }
+        viewModelScope.launch { then(library.add(candidate, vocalFree, model).id) }
     }
 
     override fun onCleared() = player.stop()
 }
 
 @Composable
-fun SearchRoute(sources: List<Source>, library: Library, onAdded: (TrackId) -> Unit) {
+fun SearchRoute(sources: List<Source>, library: Library, choices: ModelChoices, onAdded: (TrackId) -> Unit) {
     val viewModel: SearchViewModel = viewModel(factory = viewModelFactory { initializer { SearchViewModel(sources, library) } })
     val query by viewModel.query.collectAsStateWithLifecycle()
     val selected by viewModel.selected.collectAsStateWithLifecycle()
@@ -171,8 +182,8 @@ fun SearchRoute(sources: List<Source>, library: Library, onAdded: (TrackId) -> U
             sourceName = sources.nameOf(candidate),
             player = playing,
             onTogglePlay = viewModel.player::toggle,
-            onAdd = { viewModel.add(candidate, vocalFree = false, onAdded) },
-            onAddVocalFree = { viewModel.add(candidate, vocalFree = true, onAdded) },
+            choice = rememberImportChoice(choices),
+            onAdd = { vocalFree, model -> viewModel.add(candidate, vocalFree, model, onAdded) },
             onDismiss = viewModel::closePreview,
         )
     }
@@ -240,14 +251,15 @@ private fun PreviewSheet(
     sourceName: String?,
     player: PreviewPlayer.State,
     onTogglePlay: () -> Unit,
-    onAdd: () -> Unit,
-    /** The secondary add: the result has no vocals, so Separation is skipped (ADR 14). */
-    onAddVocalFree: () -> Unit,
+    /** The import options (ADR 14, ADR 19): "No vocals" and the model, pre-selected to the default. */
+    choice: ImportChoice,
+    onAdd: (vocalFree: Boolean, model: SeparationModelId?) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            RemoteImage(candidate.thumbnailUrl, Modifier.fillMaxWidth().aspectRatio(16f / 9f))
+    // Fully open: the import options and the add button show without dragging the sheet up.
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            RemoteImage(candidate.thumbnailUrl, Modifier.height(160.dp).aspectRatio(16f / 9f))
             Text(candidate.title, style = MaterialTheme.typography.titleMedium)
             Text(
                 candidate.details(sourceName),
@@ -264,9 +276,12 @@ private fun PreviewSheet(
                     onClick = onTogglePlay,
                     enabled = player == PreviewPlayer.State.Playing || player == PreviewPlayer.State.Paused,
                 ) { Text(if (player == PreviewPlayer.State.Playing) "Pause" else "Play") }
-                Button(onClick = onAdd) { Text("Add to Library") }
             }
-            TextButton(onClick = onAddVocalFree) { Text("Add without vocal removal") }
+            ImportOptions(choice, candidate.durationMs)
+            // Adding with the defaults stays one tap (ADR 19).
+            Button(onClick = { onAdd(choice.vocalFree, choice.model.takeUnless { choice.vocalFree }) }, enabled = choice.loaded) {
+                Text(importLabel(choice))
+            }
             Spacer(Modifier.height(16.dp))
         }
     }

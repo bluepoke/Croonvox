@@ -3,6 +3,7 @@ package app.croonvox.core
 
 import app.croonvox.core.library.ImportLocalFile
 import app.croonvox.core.library.Library
+import app.croonvox.core.model.SeparationModelId
 import app.croonvox.core.model.SourceId
 import app.croonvox.core.model.Track
 import app.croonvox.core.model.TrackId
@@ -31,6 +32,15 @@ class ImportLocalFileTest {
         assertEquals("My Way (demo)", track.title)
         assertEquals(TrackPipelineState.Downloaded, track.pipeline)
         assertEquals(listOf(track), library.tracks().first())
+    }
+
+    @Test
+    fun `an imported file keeps the Separation Model chosen for it`() = runTest {
+        val best = SeparationModelId("best")
+
+        val track = import(FakeLocalFile(displayName = "song.mp3", content = "audio-1"), separationModel = best)
+
+        assertEquals(best, tracks.get(track.id)?.separationModel)
     }
 
     @Test

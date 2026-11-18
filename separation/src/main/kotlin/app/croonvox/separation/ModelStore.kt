@@ -29,6 +29,12 @@ class ModelStore(private val root: File, private val http: Http = UrlHttp) {
         fun get(url: String, fromByte: Long): Response
     }
 
+    /** [model]'s files are installed: using it needs no download. Reads the disk. */
+    fun isInstalled(model: SeparationModel): Boolean {
+        val download = model.download ?: return true
+        return download.files.all { File(File(root, model.id.value), it).isFile }
+    }
+
     /**
      * Returns the directory with [model]'s files, downloading them first if needed. Blocking;
      * interrupting the thread cancels it. [onDownload] receives the downloaded fraction, then
@@ -38,7 +44,7 @@ class ModelStore(private val root: File, private val http: Http = UrlHttp) {
     fun install(model: SeparationModel, onDownload: (Float) -> Unit = {}, onInstall: (Float) -> Unit = {}): File {
         val dir = File(root, model.id.value)
         val download = model.download ?: return dir
-        if (download.files.all { File(dir, it).isFile }) return dir
+        if (isInstalled(model)) return dir
         root.mkdirs()
         val part = File(root, "${model.id.value}.download")
         fetch(download, part, onDownload)
@@ -52,7 +58,13 @@ class ModelStore(private val root: File, private val http: Http = UrlHttp) {
         val unpacking = File(root, "${model.id.value}.unpacking")
         unpacking.deleteRecursively()
         unpacking.mkdirs()
-        extract(part, unpacking, download.files) { read -> onInstall(0.5f + 0.5f * read / size) }
+        if (download.archive) {
+            extract(part, unpacking, download.files) { read -> onInstall(0.5f + 0.5f * read / size) }
+        } else {
+            // A plain file (e.g. one `.onnx`): it is the model's only file, moved rather than copied.
+            val file = File(unpacking, download.files.single())
+            if (!part.renameTo(file)) throw IOException("could not move $part to $file")
+        }
         val missing = download.files.filterNot { File(unpacking, it).isFile }
         if (missing.isNotEmpty()) throw ModelCorrupt("${model.name}: download lacks $missing")
         dir.deleteRecursively()

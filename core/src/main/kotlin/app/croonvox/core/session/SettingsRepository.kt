@@ -2,6 +2,7 @@
 package app.croonvox.core.session
 
 import app.croonvox.core.model.InputDevice
+import app.croonvox.core.model.SeparationModelId
 
 /** User settings that outlive a Session. Implemented by the data layer; faked in tests. */
 interface SettingsRepository {
@@ -19,4 +20,9 @@ interface SettingsRepository {
     suspend fun inputGainDb(device: InputDevice): Float
 
     suspend fun setInputGainDb(device: InputDevice, gainDb: Float)
+
+    /** The Default Separation Model the user chose (ADR 19); null until chosen. See [app.croonvox.core.pipeline.DefaultSeparationModel]. */
+    suspend fun defaultSeparationModel(): SeparationModelId?
+
+    suspend fun setDefaultSeparationModel(model: SeparationModelId)
 }

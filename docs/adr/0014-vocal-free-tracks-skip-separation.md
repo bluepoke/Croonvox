@@ -25,6 +25,9 @@ Some Original Audio has no lead vocal to remove, for example the audio of a kara
 - Mixes (#14), the Backing Audio choice (#17) and the Guide Vocal (#18) don't exist yet. Their parts of this decision land with those tickets.
 - Since ADR 20 (#34), Track detail and the Session are one screen per Track: the toggle and the snackbar are there, and the Backing Audio choice, built in #34, is hidden on a Vocal-Free Track.
 
+## Note: one import sheet (#17, 2026-11-18)
+ADR 19's import sheet replaces the secondary add options above. A search result, a picked file, and a link or file shared from another app all show one sheet with a "No vocals" checkbox and the Separation Model selection, hidden while the checkbox is set. Shares no longer add at once, so the post-share "Mark Vocal-Free" snackbar, the "Import file without vocals" menu item and the "Add without vocal removal" button are gone. A shared link to a Track already in the Library opens it without the sheet. Unmarking the toggle opens the model picker with the Default Separation Model pre-selected.
+
 ## Considered Options
 - **The Original Audio counts as the Instrumental** (a copy or a reference, with no Vocal Stem). It keeps "Instrumental by default", but the Backing Audio choice would offer the same audio twice, and Mixes would reference an Instrumental "by Separation Model" that no model produced. Rejected.
 - **Detecting vocal-free audio.** A title hint ("karaoke", "instrumental") is unreliable: karaoke versions with guide vocals and lyric videos contain vocals, and many karaoke uploads don't say so. Audio analysis would need Separation, which costs exactly what this decision saves. Deferred.

@@ -17,11 +17,11 @@ import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.minutes
 
 /**
- * Separator contract with the real Fast model on ONNX Runtime: a short clip yields stems that are
- * as long as and sample-aligned with it. The model is downloaded once into the Gradle user home
- * (`caches/croonvox-models`), checksum-verified like on the device.
+ * Separator contract with each real model of the catalogue on ONNX Runtime: a short clip yields
+ * stems that are as long as and sample-aligned with it. The models are downloaded once into the
+ * Gradle user home (`caches/croonvox-models`), checksum-verified like on the device.
  */
-class FastModelContractTest {
+class ModelContractTest {
     @TempDir
     lateinit var dir: File
 
@@ -53,13 +53,29 @@ class FastModelContractTest {
     }
 
     @Test
-    fun `the Fast model separates a clip into stems as long as and aligned with it`() = runTest(timeout = 10.minutes) {
+    fun `the Fast model separates a clip into stems as long as and aligned with it`() = separatesClip(SeparationCatalogue.spleeter2Stems, estimates = Estimate.VocalStem)
+
+    @Test
+    fun `the Medium model separates a clip into stems as long as and aligned with it`() = separatesClip(SeparationCatalogue.uvrKaraoke, estimates = Estimate.VocalStem)
+
+    @Test
+    fun `the Best model separates a clip into stems as long as and aligned with it`() = separatesClip(SeparationCatalogue.uvrInstHq4, estimates = Estimate.Instrumental)
+
+    /** The stem a model estimates; the other one is the input minus it (ADR 15). */
+    private enum class Estimate { Instrumental, VocalStem }
+
+    /**
+     * Only the estimated stem's alignment is measured: the other is the input minus it, so it can't
+     * be shifted on its own, and where the model hears little of the clip's synthetic "voice" (Best)
+     * it is a weak residual whose correlation peak means nothing.
+     */
+    private fun separatesClip(model: SeparationModel, estimates: Estimate) = runTest(timeout = 10.minutes) {
         val input = clip()
         val original = File(dir, "original").also { files.write(it, input) }
         val stems = Stems(AudioFile(File(dir, "instrumental").path), AudioFile(File(dir, "vocals").path))
         val separator = ModelSeparator(SeparationCatalogue.models, ModelStore(cache), files, files)
 
-        separator.separate(AudioFile(original.path), SeparationCatalogue.default.id, stems, AppDirectory(File(dir, "checkpoint").path))
+        separator.separate(AudioFile(original.path), model.id, stems, AppDirectory(File(dir, "checkpoint").path))
 
         val instrumental = files.read(File(stems.instrumental.path))
         val vocals = files.read(File(stems.vocalStem.path))
@@ -72,8 +88,10 @@ class FastModelContractTest {
         val vocalsMono = mono(vocals)
         assertTrue(rms(vocalsMono) > 0.05 * rms(inputMono), "the Vocal Stem carries the voice")
         assertTrue(rms(instrumentalMono) > 0.05 * rms(inputMono), "the Instrumental carries the band")
-        assertEquals(0, assertNotNull(lag(inputMono, instrumentalMono)), "Instrumental lag")
-        assertEquals(0, assertNotNull(lag(inputMono, vocalsMono)), "Vocal Stem lag")
+        when (estimates) {
+            Estimate.Instrumental -> assertEquals(0, assertNotNull(lag(inputMono, instrumentalMono)), "Instrumental lag")
+            Estimate.VocalStem -> assertEquals(0, assertNotNull(lag(inputMono, vocalsMono)), "Vocal Stem lag")
+        }
     }
 
     private fun mono(audio: RawPcmFiles.Audio) = FloatArray(audio.frames) { audio.interleaved[2 * it] + audio.interleaved[2 * it + 1] }

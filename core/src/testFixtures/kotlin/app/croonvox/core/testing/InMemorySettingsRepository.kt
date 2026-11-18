@@ -2,6 +2,7 @@
 package app.croonvox.core.testing
 
 import app.croonvox.core.model.InputDevice
+import app.croonvox.core.model.SeparationModelId
 import app.croonvox.core.session.SettingsRepository
 
 class InMemorySettingsRepository : SettingsRepository {
@@ -25,5 +26,13 @@ class InMemorySettingsRepository : SettingsRepository {
 
     override suspend fun setInputGainDb(device: InputDevice, gainDb: Float) {
         gains[device] = gainDb
+    }
+
+    private var defaultSeparationModel: SeparationModelId? = null
+
+    override suspend fun defaultSeparationModel(): SeparationModelId? = defaultSeparationModel
+
+    override suspend fun setDefaultSeparationModel(model: SeparationModelId) {
+        defaultSeparationModel = model
     }
 }

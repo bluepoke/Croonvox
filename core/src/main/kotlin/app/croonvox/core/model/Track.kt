@@ -22,6 +22,12 @@ data class Track(
      * plays only once there is one (see [instrumentalModel]); the Original Audio plays meanwhile.
      */
     val backingChoice: BackingChoice = BackingChoice.Instrumental,
+    /**
+     * The Separation Model the user picked for the Track (ADR 19): when adding it, re-separating it,
+     * or unmarking it Vocal-Free. A Track reaching Downloaded (also by a retry) is separated with
+     * it. Null for Tracks added before models could be picked; they get the Default Separation Model.
+     */
+    val separationModel: SeparationModelId? = null,
 ) {
     /**
      * The Separation Model whose Instrumental is stored, once the Track is Ready with stems; null

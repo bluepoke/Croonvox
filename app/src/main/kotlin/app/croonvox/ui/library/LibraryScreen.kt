@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package app.croonvox.ui.library
 
+import android.net.Uri
 import android.text.format.DateUtils
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -51,27 +52,26 @@ import app.croonvox.ui.theme.CroonvoxTheme
 fun LibraryRoute(
     library: Library,
     importer: Importer,
+    /** A file was picked: the import sheet asks how to add it (ADR 19). */
+    onPicked: (Uri) -> Unit,
     onOpen: (TrackId) -> Unit,
     onStorage: () -> Unit,
+    onSettings: () -> Unit,
     onSearch: (() -> Unit)? = null,
 ) {
     val viewModel: LibraryViewModel = viewModel(factory = viewModelFactory { initializer { LibraryViewModel(library) } })
     val state by viewModel.state.collectAsStateWithLifecycle()
     val importing by importer.importing.collectAsStateWithLifecycle()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) importer.import(uri)
-    }
-    // The secondary import: the file has no vocals, so Separation is skipped (ADR 14).
-    val vocalFreePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) importer.import(uri, vocalFree = true)
+        if (uri != null) onPicked(uri)
     }
     LibraryScreen(
         state = state,
         importing = importing > 0,
         onImport = { picker.launch(arrayOf("audio/*", "video/*")) },
-        onImportVocalFree = { vocalFreePicker.launch(arrayOf("audio/*", "video/*")) },
         onOpen = onOpen,
         onStorage = onStorage,
+        onSettings = onSettings,
         onSearch = onSearch,
     )
 }
@@ -82,9 +82,9 @@ fun LibraryScreen(
     state: LibraryUiState,
     importing: Boolean = false,
     onImport: () -> Unit = {},
-    onImportVocalFree: () -> Unit = {},
     onOpen: (TrackId) -> Unit = {},
     onStorage: () -> Unit = {},
+    onSettings: () -> Unit = {},
     /** Opens the search; null when the app has no network Sources (local flavor). */
     onSearch: (() -> Unit)? = null,
 ) {
@@ -100,10 +100,10 @@ fun LibraryScreen(
                         TextButton(onClick = { menu = true }) { Text("⋮") }
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                             DropdownMenuItem(
-                                text = { Text("Import file without vocals") },
+                                text = { Text("Settings") },
                                 onClick = {
                                     menu = false
-                                    onImportVocalFree()
+                                    onSettings()
                                 },
                             )
                         }

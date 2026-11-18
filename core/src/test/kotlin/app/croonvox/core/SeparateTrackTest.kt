@@ -5,6 +5,7 @@ import app.croonvox.core.library.ImportLocalFile
 import app.croonvox.core.model.PipelineStep
 import app.croonvox.core.model.SeparationModelId
 import app.croonvox.core.model.TrackPipelineState
+import app.croonvox.core.pipeline.DefaultSeparationModel
 import app.croonvox.core.pipeline.SeparateTrack
 import app.croonvox.core.pipeline.TrackPipeline
 import app.croonvox.core.pipeline.VocalFreeToggle
@@ -13,6 +14,7 @@ import app.croonvox.core.port.SeparationProgress
 import app.croonvox.core.testing.FakeLocalFile
 import app.croonvox.core.testing.FakePipelineJobs
 import app.croonvox.core.testing.FakeSeparator
+import app.croonvox.core.testing.InMemorySettingsRepository
 import app.croonvox.core.testing.InMemoryTrackFiles
 import app.croonvox.core.testing.InMemoryTrackRepository
 import kotlinx.coroutines.CompletableDeferred
@@ -154,7 +156,7 @@ class SeparateTrackTest {
     @Test
     fun `a Separation still running when its Track is marked Vocal-Free writes nothing over it`() = runTest {
         val track = import(FakeLocalFile(displayName = "karaoke.mp3", content = "audio-1"))
-        val vocalFree = VocalFreeToggle(tracks, files, FakePipelineJobs(), defaultModel = fast, models = listOf(fast))
+        val vocalFree = VocalFreeToggle(tracks, files, FakePipelineJobs(), models = listOf(fast))
         separator.progress = listOf(0.2f, 0.5f, 0.9f).map { SeparationProgress(SeparationProgress.Stage.Separating, it) }
         // The user marks the Track while the job is at 20 %; the job doesn't stop at once.
         separator.afterEachProgress = { if (it.fraction == 0.2f) vocalFree.mark(track.id) }
@@ -169,7 +171,7 @@ class SeparateTrackTest {
     fun `a Separation still running when its Track is re-separated with another model writes nothing over it`() = runTest {
         val best = SeparationModelId("best")
         val track = import(FakeLocalFile(displayName = "song.mp3", content = "audio-1"))
-        val pipeline = TrackPipeline(tracks, FakePipelineJobs(), defaultModel = fast)
+        val pipeline = TrackPipeline(tracks, FakePipelineJobs(), DefaultSeparationModel(InMemorySettingsRepository(), listOf(fast), fallback = fast))
         separator.progress = listOf(0.2f, 0.5f, 0.9f).map { SeparationProgress(SeparationProgress.Stage.Separating, it) }
         // The user picks Best while Fast is at 20 %; the Fast job doesn't stop at once.
         separator.afterEachProgress = { if (it.fraction == 0.2f) pipeline.reseparate(track.id, best) }
@@ -184,7 +186,7 @@ class SeparateTrackTest {
     fun `after a model switch the new Separation waits until the replaced one has stopped`() = runTest {
         val best = SeparationModelId("best")
         val track = import(FakeLocalFile(displayName = "song.mp3", content = "audio-1"))
-        val pipeline = TrackPipeline(tracks, FakePipelineJobs(), defaultModel = fast)
+        val pipeline = TrackPipeline(tracks, FakePipelineJobs(), DefaultSeparationModel(InMemorySettingsRepository(), listOf(fast), fallback = fast))
         // The Fast job is slow to stop: it is stuck in its current block until released.
         val fastStops = CompletableDeferred<Unit>()
         separator.afterEachProgress = { if (separator.requests.last().model == fast) fastStops.await() }

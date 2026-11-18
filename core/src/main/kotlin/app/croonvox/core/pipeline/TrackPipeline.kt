@@ -11,13 +11,14 @@ import app.croonvox.core.model.TrackPipelineState
 /**
  * Moves Tracks through the Track Pipeline (ADR 10): a Track added from one of the network Sources
  * in [downloadFrom] is queued for download, and every Track that reaches Downloaded is queued for
- * Separation with [defaultModel], or is Ready at once if it is Vocal-Free (ADR 14). Local imports aren't downloaded: a local Track left in Added is
- * an import that never finished, and importing the file again completes it.
+ * Separation with the model chosen when it was added, or the [defaultModel] (ADR 19), or is Ready
+ * at once if it is Vocal-Free (ADR 14). Local imports aren't downloaded: a local Track left in
+ * Added is an import that never finished, and importing the file again completes it.
  */
 class TrackPipeline(
     private val tracks: TrackRepository,
     private val jobs: PipelineJobs,
-    private val defaultModel: SeparationModelId,
+    private val defaultModel: DefaultSeparationModel,
     private val downloadFrom: Set<SourceId> = emptySet(),
 ) {
     /** Follows the Library until cancelled; runs for the lifetime of the app process. */
@@ -36,15 +37,16 @@ class TrackPipeline(
                     // Left Downloading by an earlier process (or queued above): make sure its job exists.
                     is TrackPipelineState.Downloading -> if (queued.add(track.id)) jobs.download(track.id)
                     TrackPipelineState.Downloaded -> {
+                        val model = track.separationModel ?: defaultModel.get()
                         // One atomic step, so marking the Track Vocal-Free meanwhile is never missed.
                         val next = tracks.update(track.id) { now ->
                             if (now.pipeline != TrackPipelineState.Downloaded) return@update null
                             // A Vocal-Free Track skips Separation (ADR 14).
-                            now.copy(pipeline = if (now.vocalFree) TrackPipelineState.Ready(model = null) else TrackPipelineState.Separating(defaultModel))
+                            now.copy(pipeline = if (now.vocalFree) TrackPipelineState.Ready(model = null) else TrackPipelineState.Separating(model))
                         }
-                        if (next?.pipeline == TrackPipelineState.Separating(defaultModel)) {
+                        if (next?.pipeline == TrackPipelineState.Separating(model)) {
                             queued += track.id
-                            jobs.separate(track.id, defaultModel)
+                            jobs.separate(track.id, model)
                         }
                     }
                     // Left Separating by an earlier process (or queued above): make sure its job exists.
@@ -56,22 +58,31 @@ class TrackPipeline(
     }
 
     /**
-     * Separates a Track that is Separating with another model with [model] instead (ADR 10, #28):
-     * the running Separation is replaced, not queued behind. Its checkpoint stays, so separating
-     * with that model again continues where it stopped. Re-separating a Ready Track comes with #17.
+     * Separates the Track again with [model] (ADR 19): any Track whose Original Audio is stored,
+     * unless it is Vocal-Free (ADR 14) or already Ready or Separating with [model]. The Original
+     * Audio plays until the new Instrumental is there, and Takes stay aligned, since stems are
+     * sample-aligned with the Original Audio (ADR 8). The previous model's stems stay until they are
+     * deleted on the storage screen.
+     *
+     * A running Separation is replaced, not queued behind (ADR 10, #28). Its checkpoint stays, so
+     * separating with that model again continues where it stopped.
      */
     suspend fun reseparate(id: TrackId, model: SeparationModelId) {
-        // State first: the replaced job writes only while the Track waits for its model (SeparateTrack).
-        var replaced = false
+        // State first: a replaced job writes only while the Track waits for its model (SeparateTrack).
+        var before: TrackPipelineState? = null
+        var switched = false
         tracks.update(id) { track ->
             val now = track.pipeline
-            replaced = now is TrackPipelineState.Separating && now.model != model
-            if (replaced) track.copy(pipeline = TrackPipelineState.Separating(model)) else null
+            before = now
+            switched = !track.vocalFree && track.hasOriginalAudio &&
+                now != TrackPipelineState.Ready(model) && !(now is TrackPipelineState.Separating && now.model == model)
+            // The model is kept on the Track too, so retrying a failed re-separation uses it.
+            if (switched) track.copy(separationModel = model, pipeline = TrackPipelineState.Separating(model)) else null
         }
-        if (!replaced) return
-        // Then stop the replaced job, and only then queue the new one, which the cancel would stop
+        if (!switched) return
+        // Then stop a replaced job, and only then queue the new one, which the cancel would stop
         // too. If the replaced job is slow to stop, the new one waits for it (SeparateTrack).
-        jobs.cancelSeparation(id)
+        if (before is TrackPipelineState.Separating) jobs.cancelSeparation(id)
         jobs.separate(id, model)
     }
 

@@ -11,14 +11,13 @@ import app.croonvox.core.model.TrackPipelineState
 
 /**
  * The Vocal-Free toggle on the Track's screen (GLOSSARY: Vocal-Free, ADR 14). Marking skips or undoes
- * Separation; unmarking separates the Track with [defaultModel] like a newly downloaded one.
+ * Separation; unmarking separates the Track with the model the user picks (ADR 19).
  * [models] are the Separation Models whose stems a Track may hold.
  */
 class VocalFreeToggle(
     private val tracks: TrackRepository,
     private val files: TrackFiles,
     private val jobs: PipelineJobs,
-    private val defaultModel: SeparationModelId,
     private val models: List<SeparationModelId>,
 ) {
     /** Bytes that marking the Track would free: its stems. The UI asks for confirmation when this isn't 0. */
@@ -51,18 +50,22 @@ class VocalFreeToggle(
         models.forEach { files.deleteStems(id, it) }
     }
 
-    /** Unmarks the Track: a Ready one goes back through Separating with [defaultModel] (ADR 14). */
-    suspend fun unmark(id: TrackId) {
+    /**
+     * Unmarks the Track, to be separated with [model] (the model picker opens with the Default
+     * Separation Model, ADR 19): a Ready one goes back through Separating with it (ADR 14), one
+     * still to be downloaded is separated with it once it is.
+     */
+    suspend fun unmark(id: TrackId, model: SeparationModelId) {
         val track = tracks.update(id) { track ->
             when {
                 !track.vocalFree -> null
                 track.pipeline == TrackPipelineState.Ready(model = null) ->
-                    track.copy(vocalFree = false, pipeline = TrackPipelineState.Separating(defaultModel))
-                else -> track.copy(vocalFree = false)
+                    track.copy(vocalFree = false, separationModel = model, pipeline = TrackPipelineState.Separating(model))
+                else -> track.copy(vocalFree = false, separationModel = model)
             }
         }
         // Queued here, not left to the Track Pipeline: it may never see the short Ready in between.
-        if (track?.pipeline == TrackPipelineState.Separating(defaultModel)) jobs.separate(id, defaultModel)
+        if (track?.pipeline == TrackPipelineState.Separating(model)) jobs.separate(id, model)
     }
 
     /** Separation is running, failed or done: marking makes the Track Ready at once. */

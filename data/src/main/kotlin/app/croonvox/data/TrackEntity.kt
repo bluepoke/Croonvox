@@ -32,6 +32,8 @@ internal data class TrackEntity(
     @ColumnInfo(name = "vocal_free", defaultValue = "0") val vocalFree: Boolean = false,
     /** The Backing Audio the user chose (version 10, #34): `instrumental` or `original_audio`. */
     @ColumnInfo(name = "backing_choice", defaultValue = INSTRUMENTAL) val backingChoice: String = INSTRUMENTAL,
+    /** The Separation Model picked for the Track (version 11, #17); null for Tracks added before. */
+    @ColumnInfo(name = "separation_model") val separationModel: String? = null,
 )
 
 internal fun Track.toEntity(addedAt: Long): TrackEntity {
@@ -49,6 +51,7 @@ internal fun Track.toEntity(addedAt: Long): TrackEntity {
         lastSessionAt = lastSessionAt,
         vocalFree = vocalFree,
         backingChoice = backingChoice.toColumn(),
+        separationModel = separationModel?.value,
     )
 }
 
@@ -61,6 +64,7 @@ internal fun TrackEntity.toTrack() = Track(
     lastSessionAt = lastSessionAt,
     vocalFree = vocalFree,
     backingChoice = backingChoiceFromColumn(backingChoice),
+    separationModel = separationModel?.let(::SeparationModelId),
 )
 
 private fun BackingChoice.toColumn(): String = when (this) {

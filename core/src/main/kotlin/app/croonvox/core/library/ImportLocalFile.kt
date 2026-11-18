@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package app.croonvox.core.library
 
+import app.croonvox.core.model.SeparationModelId
 import app.croonvox.core.model.SourceId
 import app.croonvox.core.model.Track
 import app.croonvox.core.model.TrackId
@@ -12,8 +13,11 @@ import app.croonvox.core.port.LocalFile
  * into app storage as Original Audio, and the Track moves Added → Downloaded (ADR 8, ADR 10).
  */
 class ImportLocalFile(private val tracks: TrackRepository, private val files: TrackFiles) {
-    /** Imports [file], marked [vocalFree] if asked; content imported before keeps its Track unchanged (ADR 14). */
-    suspend operator fun invoke(file: LocalFile, vocalFree: Boolean = false): Track {
+    /**
+     * Imports [file], marked [vocalFree] if asked, to be separated with [separationModel] (ADR 19);
+     * content imported before keeps its Track unchanged (ADR 14).
+     */
+    suspend operator fun invoke(file: LocalFile, vocalFree: Boolean = false, separationModel: SeparationModelId? = null): Track {
         val staged = file.open().use { files.stage(it) }
         val id = TrackId(SourceId.Local, staged.sha256)
         val track = tracks.addIfAbsent(
@@ -24,6 +28,7 @@ class ImportLocalFile(private val tracks: TrackRepository, private val files: Tr
                 durationMs = null,
                 pipeline = TrackPipelineState.Added,
                 vocalFree = vocalFree,
+                separationModel = separationModel,
             ),
         )
         // Same content imported before: keep that Track and its stored file untouched. Only a

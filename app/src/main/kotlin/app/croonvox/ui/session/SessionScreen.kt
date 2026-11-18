@@ -43,10 +43,8 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SingleChoiceSegmentedButtonRowScope
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -56,7 +54,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -81,13 +78,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import app.croonvox.core.library.TrackRepository
 import app.croonvox.core.lyrics.Lrc
 import app.croonvox.core.lyrics.LyricsOffset
 import app.croonvox.core.lyrics.LyricsRepository
 import app.croonvox.core.lyrics.MatchLyrics
 import app.croonvox.core.lyrics.TrackLyrics
 import app.croonvox.core.lyrics.candidate
-import app.croonvox.core.library.TrackRepository
 import app.croonvox.core.model.BackingChoice
 import app.croonvox.core.model.InputDevice
 import app.croonvox.core.model.OutputRoute
@@ -109,12 +106,16 @@ import app.croonvox.core.session.BackingAudio
 import app.croonvox.core.session.Session
 import app.croonvox.core.session.SessionState
 import app.croonvox.core.session.Sessions
+import app.croonvox.separating.ModelChoices
 import app.croonvox.ui.formatTime
 import app.croonvox.ui.label
-import app.croonvox.ui.lyrics.details
-import app.croonvox.ui.lyrics.name
 import app.croonvox.ui.lyrics.KaraokeView
 import app.croonvox.ui.lyrics.PageView
+import app.croonvox.ui.lyrics.details
+import app.croonvox.ui.lyrics.name
+import app.croonvox.ui.models.DownloadNote
+import app.croonvox.ui.models.ModelPicker
+import app.croonvox.ui.models.confirmLabel
 import app.croonvox.ui.theme.CroonvoxButtonShape
 import app.croonvox.ui.theme.CroonvoxTheme
 import app.croonvox.ui.verticalScrollbar
@@ -132,13 +133,12 @@ fun SessionRoute(
     match: MatchLyrics,
     lyricsOffset: LyricsOffset,
     vocalFreeToggle: VocalFreeToggle,
-    /** The Track was just added from a share, without the chance to mark it Vocal-Free first. */
-    offerVocalFree: Boolean,
+    choices: ModelChoices,
     onChooseLyrics: () -> Unit,
 ) {
     val viewModel: SessionViewModel = viewModel(
         factory = viewModelFactory {
-            initializer { SessionViewModel(id, tracks, sessions, pipeline, lyrics, match, lyricsOffset, vocalFreeToggle) }
+            initializer { SessionViewModel(id, tracks, sessions, pipeline, lyrics, match, lyricsOffset, vocalFreeToggle, choices) }
         },
     )
     val context = LocalContext.current
@@ -169,17 +169,8 @@ fun SessionRoute(
             viewModel.messageShown()
         }
     }
-    // A share adds at once; offer Vocal-Free afterwards, while it still saves Separation (ADR 14).
-    var offered by rememberSaveable { mutableStateOf(false) }
-    val offerable = offerVocalFree && !offered && track?.let { !it.vocalFree && it.pipeline !is TrackPipelineState.Ready } == true
-    LaunchedEffect(offerable) {
-        if (!offerable) return@LaunchedEffect
-        // Marked as offered only once it was seen: changing the key while it shows would cancel it.
-        // It goes away by itself if the offer stops making sense (marked, or Ready) meanwhile.
-        val result = snackbar.showSnackbar("No vocals in this song?", actionLabel = "Mark Vocal-Free", duration = SnackbarDuration.Long)
-        offered = true
-        if (result == SnackbarResult.ActionPerformed) viewModel.setVocalFree(true)
-    }
+    val modelPick by viewModel.modelPick.collectAsStateWithLifecycle()
+    modelPick?.let { pick -> ModelPickDialog(pick, track, viewModel::pickModel, viewModel::confirmModelPick) }
     val confirmVocalFree by viewModel.confirmVocalFree.collectAsStateWithLifecycle()
     confirmVocalFree?.let { bytes ->
         AlertDialog(
@@ -212,6 +203,7 @@ fun SessionRoute(
         snackbar = snackbar,
         content = SessionContent(
             track, loadProgress, state, backing, playback, input, gain, countdown, reviewBacking, takes, trackLyrics, offsetMs, karaoke, transpose,
+            modelName = choices::nameOf,
         ),
         actions = SessionActions(
             onTogglePlay = viewModel::togglePlay,
@@ -238,7 +230,48 @@ fun SessionRoute(
             onConfirmLyrics = viewModel::confirmLyrics,
             onChooseLyrics = onChooseLyrics,
             onVocalFree = viewModel::setVocalFree,
+            onReseparate = viewModel::startReseparating,
         ),
+    )
+}
+
+/**
+ * The model picker for re-separating the Track or unmarking it Vocal-Free (ADR 19), with the
+ * Default Separation Model pre-selected. Re-separating with the model the Track already has (or is
+ * being separated with) does nothing, so it can't be confirmed.
+ */
+@Composable
+private fun ModelPickDialog(pick: ModelPick, track: Track?, onPick: (SeparationModelId) -> Unit, onConfirm: (Boolean) -> Unit) {
+    val current = when (val state = track?.pipeline) {
+        is TrackPipelineState.Ready -> state.model
+        is TrackPipelineState.Separating -> state.model
+        else -> null
+    }
+    val selected = pick.options.firstOrNull { it.id == pick.selected }
+    val reseparate = pick.purpose == ModelPick.Purpose.Reseparate
+    AlertDialog(
+        onDismissRequest = { onConfirm(false) },
+        title = { Text(if (reseparate) "Remove the vocals again" else "Remove the vocals") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (reseparate) {
+                    Text(
+                        "The original audio plays until the new instrumental is ready. Takes stay in sync.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+                ModelPicker(pick.options, pick.selected, onPick, track?.durationMs, current = current.takeIf { reseparate })
+                DownloadNote(selected)
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(true) },
+                enabled = !(reseparate && pick.selected == current),
+                shape = CroonvoxButtonShape,
+            ) { Text(confirmLabel(if (reseparate) "re-separate" else "remove vocals", selected)) }
+        },
+        dismissButton = { TextButton(onClick = { onConfirm(false) }, shape = CroonvoxButtonShape) { Text("Cancel") } },
     )
 }
 
@@ -263,6 +296,8 @@ data class SessionContent(
     val karaoke: Boolean,
     /** The Transpose control: free playback and the next Take. */
     val transpose: Transpose,
+    /** A Separation Model's name in the picker ("Fast", "Best"). */
+    val modelName: (SeparationModelId) -> String = { it.value },
 )
 
 data class SessionActions(
@@ -290,6 +325,7 @@ data class SessionActions(
     val onConfirmLyrics: () -> Unit = {},
     val onChooseLyrics: () -> Unit = {},
     val onVocalFree: (Boolean) -> Unit = {},
+    val onReseparate: () -> Unit = {},
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -385,6 +421,7 @@ private fun TrackTitle(track: Track?) {
 private fun SessionControls(openError: String?, content: SessionContent, actions: SessionActions) {
     val track = content.track ?: return LinearProgressIndicator(Modifier.fillMaxWidth())
     PipelineStatus(track.pipeline, actions.onRetry)
+    VocalRemoval(track, content.modelName, actions.onReseparate)
     LyricsStatus(content.lyrics, actions.onConfirmLyrics, actions.onChooseLyrics)
     when {
         openError != null -> Text("Can't play this Track: $openError", color = MaterialTheme.colorScheme.error)
@@ -468,6 +505,28 @@ private fun PipelineStatus(pipeline: TrackPipelineState, onRetry: () -> Unit) {
         // Opening the Track brings deleted stems back, so this shows only for a moment (ADR 17).
         TrackPipelineState.Added, TrackPipelineState.Downloaded, is TrackPipelineState.StemsDeleted ->
             Text(pipeline.label(), style = MaterialTheme.typography.bodySmall, color = muted)
+    }
+}
+
+/**
+ * Which Separation Model removes the Track's vocals, and the way to pick another (ADR 19). Not for a
+ * Vocal-Free Track, which isn't separated (ADR 14), nor before the Original Audio is stored.
+ */
+@Composable
+private fun VocalRemoval(track: Track, modelName: (SeparationModelId) -> String, onReseparate: () -> Unit) {
+    if (track.vocalFree || !track.hasOriginalAudio) return
+    val model = when (val state = track.pipeline) {
+        is TrackPipelineState.Ready -> state.model
+        is TrackPipelineState.Separating -> state.model
+        is TrackPipelineState.StemsDeleted -> state.model
+        else -> null
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text("Vocal removal", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            model?.let { Text(modelName(it), style = rowLabel()) }
+        }
+        NeutralOutlinedButton("Re-separate", onReseparate, Modifier.height(44.dp))
     }
 }
 

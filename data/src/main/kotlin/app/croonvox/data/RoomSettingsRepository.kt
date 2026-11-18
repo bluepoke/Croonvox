@@ -8,6 +8,7 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Upsert
 import app.croonvox.core.model.InputDevice
+import app.croonvox.core.model.SeparationModelId
 import app.croonvox.core.session.SettingsRepository
 
 /** One user setting as a key/value row; keys are stable strings. */
@@ -43,6 +44,11 @@ class RoomSettingsRepository(database: CroonvoxDatabase) : SettingsRepository {
     override suspend fun setInputGainDb(device: InputDevice, gainDb: Float) =
         dao.put(SettingEntity(gainKey(device), gainDb.toString()))
 
+    override suspend fun defaultSeparationModel(): SeparationModelId? = dao.get(DEFAULT_SEPARATION_MODEL)?.let(::SeparationModelId)
+
+    override suspend fun setDefaultSeparationModel(model: SeparationModelId) =
+        dao.put(SettingEntity(DEFAULT_SEPARATION_MODEL, model.value))
+
     private fun gainKey(device: InputDevice): String = "input_gain_db:" + when (device) {
         InputDevice.BuiltIn -> "built_in"
         InputDevice.Wired -> "wired"
@@ -54,5 +60,6 @@ class RoomSettingsRepository(database: CroonvoxDatabase) : SettingsRepository {
     private companion object {
         const val COUNTDOWN = "countdown_enabled"
         const val REVIEW_BACKING = "review_backing_db"
+        const val DEFAULT_SEPARATION_MODEL = "default_separation_model"
     }
 }
