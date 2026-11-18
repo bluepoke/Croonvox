@@ -6,6 +6,7 @@ import app.croonvox.core.model.PipelineStep
 import app.croonvox.core.model.SeparationModelId
 import app.croonvox.core.model.TrackPipelineState
 import app.croonvox.core.pipeline.SeparateTrack
+import app.croonvox.core.pipeline.TrackPipeline
 import app.croonvox.core.pipeline.VocalFreeToggle
 import app.croonvox.core.port.SeparationFailed
 import app.croonvox.core.port.SeparationProgress
@@ -159,5 +160,20 @@ class SeparateTrackTest {
 
         assertEquals(SeparateTrack.Outcome.Skipped, outcome)
         assertEquals(TrackPipelineState.Ready(model = null), tracks.get(track.id)?.pipeline)
+    }
+
+    @Test
+    fun `a Separation still running when its Track is re-separated with another model writes nothing over it`() = runTest {
+        val best = SeparationModelId("best")
+        val track = import(FakeLocalFile(displayName = "song.mp3", content = "audio-1"))
+        val pipeline = TrackPipeline(tracks, FakePipelineJobs(), defaultModel = fast)
+        separator.progress = listOf(0.2f, 0.5f, 0.9f).map { SeparationProgress(SeparationProgress.Stage.Separating, it) }
+        // The user picks Best while Fast is at 20 %; the Fast job doesn't stop at once.
+        separator.afterEachProgress = { if (it.fraction == 0.2f) pipeline.reseparate(track.id, best) }
+
+        val outcome = separate(track.id, fast)
+
+        assertEquals(SeparateTrack.Outcome.Skipped, outcome)
+        assertEquals(TrackPipelineState.Separating(best), tracks.get(track.id)?.pipeline)
     }
 }

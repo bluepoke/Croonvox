@@ -18,6 +18,9 @@ Deleting a Ready Track's stems on the storage screen moves it to **Stems Deleted
 ## Note: local import (#5)
 Importing a picked or shared file (Local File Source) is **not** a WorkManager job. The read grant for a picked or shared content URI does not survive the process, so a job retried after process death could not read the file. The import runs in one short in-process step instead: copy and hash, then the Track moves `Added → Downloaded`. Staging files of imports that never finished are deleted at the next start. An import that died after the Track row was written but before the file was stored leaves a Track in `Added`; importing the same file again completes it.
 
+## Note: Separation jobs per model (#28)
+A Separation job is keyed by Track **and** Separation Model (`separate:<track>:<model>`). Jobs for the same Track and model queue behind each other. Re-separating a Track with another model while one runs **replaces** the running Separation instead of queuing behind it: the Track moves to `Separating(new model)` first, so the old job writes nothing more, then the old job is cancelled and the new one queued. The old model's checkpoint stays, so separating with it again continues where it stopped. Queuing behind was rejected: the Track has one `Separating(model)` state, the user would wait for a model they no longer want, and two Separations at once risk running out of memory (Best and Medium need about 1 GB). Jobs queued before #28 (`separate:<track>`) are stopped at app start, and the Track Pipeline queues their Tracks again under the new name.
+
 ## Consequences
 - Pipeline steps must be idempotent and keyed by Track ID (and Separation Model).
 - The pipeline state is persisted in Room and is the single source of truth for the UI.

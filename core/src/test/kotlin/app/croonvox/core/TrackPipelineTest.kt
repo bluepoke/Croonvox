@@ -156,6 +156,40 @@ class TrackPipelineTest {
     }
 
     @Test
+    fun `re-separating with another model while one runs replaces the running Separation`() = runTest {
+        val best = SeparationModelId("best")
+        startPipeline()
+        val track = import(FakeLocalFile(displayName = "song.mp3", content = "audio-1"))
+        tracks.updatePipeline(track.id, TrackPipelineState.Separating(fast, SeparationProgress(SeparationProgress.Stage.Separating, 0.4f)))
+        // While the running job is being stopped, the Track already waits for the new model, so the
+        // stopping job can't write over it, and the new job isn't queued yet, so it isn't cancelled too.
+        jobs.onCancelSeparation = {
+            assertEquals(TrackPipelineState.Separating(best), tracks.get(track.id)?.pipeline)
+            assertEquals(listOf(FakePipelineJobs.Separation(track.id, fast)), jobs.separations)
+        }
+
+        pipeline.reseparate(track.id, best)
+
+        assertEquals(listOf(track.id), jobs.cancelledSeparations)
+        assertEquals(listOf(FakePipelineJobs.Separation(track.id, fast), FakePipelineJobs.Separation(track.id, best)), jobs.separations)
+        assertEquals(TrackPipelineState.Separating(best), tracks.get(track.id)?.pipeline)
+    }
+
+    @Test
+    fun `re-separating with the model that is running keeps the running Separation`() = runTest {
+        startPipeline()
+        val track = import(FakeLocalFile(displayName = "song.mp3", content = "audio-1"))
+        val running = TrackPipelineState.Separating(fast, SeparationProgress(SeparationProgress.Stage.Separating, 0.4f))
+        tracks.updatePipeline(track.id, running)
+
+        pipeline.reseparate(track.id, fast)
+
+        assertEquals(emptyList(), jobs.cancelledSeparations)
+        assertEquals(listOf(FakePipelineJobs.Separation(track.id, fast)), jobs.separations)
+        assertEquals(running, tracks.get(track.id)?.pipeline)
+    }
+
+    @Test
     fun `adding an existing Track again with the Vocal-Free option leaves it unchanged`() = runTest {
         startPipeline()
         val file = FakeLocalFile(displayName = "song.mp3", content = "audio-1")

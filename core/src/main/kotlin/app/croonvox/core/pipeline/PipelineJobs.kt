@@ -11,7 +11,9 @@ import app.croonvox.core.model.TrackId
 interface PipelineJobs {
     /**
      * Queues [SeparateTrack] for [track] with [model], after any job already queued or running
-     * for the Track. Calling it again is harmless: a job finding the Track done does nothing.
+     * for the Track with that model. Calling it again is harmless: a job finding the Track done
+     * does nothing. Jobs are keyed by Track and Separation Model (ADR 10): a job with another model
+     * isn't waited for, so whoever switches the model stops it first ([TrackPipeline.reseparate]).
      */
     fun separate(track: TrackId, model: SeparationModelId)
 
@@ -24,7 +26,7 @@ interface PipelineJobs {
      */
     fun fetchLyrics(track: TrackId)
 
-    /** Cancels a Separation queued or running for [track] and waits until it has stopped. */
+    /** Cancels every Separation queued or running for [track], whatever its model, and waits until they have stopped. */
     suspend fun cancelSeparation(track: TrackId)
 
     /** Cancels every job queued or running for [track] (it is being deleted) and waits until they have stopped. */

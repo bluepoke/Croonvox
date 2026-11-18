@@ -19,7 +19,8 @@ import java.util.concurrent.TimeUnit
 
 /**
  * [PipelineJobs] on WorkManager: jobs survive process death and retry with backoff (ADR 10).
- * Lyrics searches wait for a network.
+ * Lyrics searches wait for a network. Separation jobs are unique per Track and Separation Model,
+ * and tagged per Track, so all of a Track's Separations can be cancelled whatever their model.
  */
 class WorkManagerPipelineJobs(private val workManager: WorkManager) : PipelineJobs {
     override fun separate(track: TrackId, model: SeparationModelId) {
@@ -33,12 +34,13 @@ class WorkManagerPipelineJobs(private val workManager: WorkManager) : PipelineJo
             )
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
             .addTag(SeparationWorker.TAG)
+            .addTag(separationsOf(track))
             .build()
-        // One chain of Separation jobs per Track. A job still queued or running is kept, and the new
-        // one runs after it: a job that is just finishing (e.g. the user retried the moment it
-        // wrote Failed) would otherwise swallow the new request. A job that finds the Track
-        // already done does nothing (SeparateTrack), so a redundant one costs nothing.
-        workManager.enqueueUniqueWork(SEPARATE.of(track), ExistingWorkPolicy.APPEND_OR_REPLACE, request)
+        // One chain of Separation jobs per Track and model. A job still queued or running is kept,
+        // and the new one runs after it: a job that is just finishing (e.g. the user retried the
+        // moment it wrote Failed) would otherwise swallow the new request. A job that finds the
+        // Track already done does nothing (SeparateTrack), so a redundant one costs nothing.
+        workManager.enqueueUniqueWork(separation(track, model), ExistingWorkPolicy.APPEND_OR_REPLACE, request)
     }
 
     override fun download(track: TrackId) {
@@ -51,14 +53,36 @@ class WorkManagerPipelineJobs(private val workManager: WorkManager) : PipelineJo
         workManager.enqueueUniqueWork(DOWNLOAD.of(track), ExistingWorkPolicy.APPEND_OR_REPLACE, request)
     }
 
-    override suspend fun cancelSeparation(track: TrackId) = cancelAndWait(listOf(SEPARATE.of(track)))
+    // The legacy name too: a job of an earlier version may still run until stopLegacySeparations is done.
+    override suspend fun cancelSeparation(track: TrackId) =
+        cancelAndWait(tags = listOf(separationsOf(track)), names = listOf(legacySeparation(track)))
 
-    override suspend fun cancelAll(track: TrackId) = cancelAndWait(listOf(SEPARATE, DOWNLOAD, LYRICS).map { it.of(track) })
+    override suspend fun cancelAll(track: TrackId) =
+        cancelAndWait(tags = listOf(separationsOf(track)), names = listOf(legacySeparation(track)) + listOf(DOWNLOAD, LYRICS).map { it.of(track) })
 
-    private suspend fun cancelAndWait(names: List<String>) {
+    /**
+     * Stops Separation jobs queued by versions before #28, named `separate:<track>` without the
+     * model and without the per-Track tag, and waits until they have stopped. Run it before the
+     * Track Pipeline starts: it queues each Track still Separating again under the new name, and
+     * the job continues from its checkpoint. Without this, the old job and the new one could run
+     * at once and write the same checkpoint.
+     */
+    suspend fun stopLegacySeparations() {
+        val legacy = workManager.getWorkInfosByTagFlow(SeparationWorker.TAG).first()
+            .filter { info -> !info.state.isFinished && info.tags.none { it.startsWith(SEPARATIONS_OF) } }
+            .map { it.id }
+        legacy.forEach(workManager::cancelWorkById)
+        withTimeoutOrNull(CANCEL_TIMEOUT_MS) {
+            legacy.forEach { id -> workManager.getWorkInfoByIdFlow(id).first { it == null || it.state.isFinished } }
+        }
+    }
+
+    private suspend fun cancelAndWait(tags: List<String>, names: List<String> = emptyList()) {
+        tags.forEach(workManager::cancelAllWorkByTag)
         names.forEach(workManager::cancelUniqueWork)
         // A running worker is stopped through coroutine cancellation; wait until WorkManager reports it.
         withTimeoutOrNull(CANCEL_TIMEOUT_MS) {
+            tags.forEach { tag -> workManager.getWorkInfosByTagFlow(tag).first { infos -> infos.all { it.state.isFinished } } }
             names.forEach { name -> workManager.getWorkInfosForUniqueWorkFlow(name).first { infos -> infos.all { it.state.isFinished } } }
         }
     }
@@ -80,9 +104,18 @@ class WorkManagerPipelineJobs(private val workManager: WorkManager) : PipelineJo
     }
 
     private companion object {
-        val SEPARATE = JobKind("separate")
         val DOWNLOAD = JobKind("download")
         val LYRICS = JobKind("lyrics")
         const val CANCEL_TIMEOUT_MS = 10_000L
+        const val SEPARATIONS_OF = "separation:"
+
+        /** The unique work name of the Separation chain of [track] with [model] (ADR 10). */
+        fun separation(track: TrackId, model: SeparationModelId) = "separate:${track.key}:${model.value}"
+
+        /** The unique work name of [track]'s Separation chain in versions before #28. */
+        fun legacySeparation(track: TrackId) = "separate:${track.key}"
+
+        /** The tag of every Separation job of [track], whatever its model. */
+        fun separationsOf(track: TrackId) = "$SEPARATIONS_OF${track.key}"
     }
 }

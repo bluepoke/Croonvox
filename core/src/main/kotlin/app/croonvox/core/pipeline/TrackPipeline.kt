@@ -56,6 +56,26 @@ class TrackPipeline(
     }
 
     /**
+     * Separates a Track that is Separating with another model with [model] instead (ADR 10, #28):
+     * the running Separation is replaced, not queued behind. Its checkpoint stays, so separating
+     * with that model again continues where it stopped. Re-separating a Ready Track comes with #17.
+     */
+    suspend fun reseparate(id: TrackId, model: SeparationModelId) {
+        // State first: the replaced job writes only while the Track waits for its model (SeparateTrack).
+        var replaced = false
+        tracks.update(id) { track ->
+            val now = track.pipeline
+            replaced = now is TrackPipelineState.Separating && now.model != model
+            if (replaced) track.copy(pipeline = TrackPipelineState.Separating(model)) else null
+        }
+        if (!replaced) return
+        // Then stop the replaced job, so two Separations of one Track never run at once, and only
+        // then queue the new one, which the cancel would stop too.
+        jobs.cancelSeparation(id)
+        jobs.separate(id, model)
+    }
+
+    /**
      * Runs a failed step again. The Track goes back to where that step starts, and [run] queues it
      * like a new one: Added for a download (continuing after the bytes it has), Downloaded for a
      * Separation (its Original Audio is still stored).

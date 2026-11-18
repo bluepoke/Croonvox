@@ -82,6 +82,8 @@ class AppContainer(private val context: Context) {
     val vocalFreeToggle: VocalFreeToggle by lazy {
         VocalFreeToggle(trackRepository, trackFiles, pipelineJobs, SeparationCatalogue.default.id, SeparationCatalogue.models.map { it.id })
     }
+    /** Stops Separation jobs of earlier versions before the Track Pipeline queues them again (#28). */
+    suspend fun stopLegacySeparations() = pipelineJobs.stopLegacySeparations()
     val trackPipeline: TrackPipeline by lazy {
         TrackPipeline(trackRepository, pipelineJobs, SeparationCatalogue.default.id, downloadFrom = sources.map { it.id }.toSet())
     }
