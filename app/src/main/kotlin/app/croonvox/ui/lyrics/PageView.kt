@@ -3,6 +3,7 @@ package app.croonvox.ui.lyrics
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
@@ -17,12 +18,14 @@ import app.croonvox.ui.theme.CroonvoxTheme
 
 /**
  * The Page View (GLOSSARY): the Lyrics as whole, readable verses that the singer scrolls. Works
- * with plain and synced Lyrics alike.
+ * with plain and synced Lyrics alike. About [VISIBLE_LYRICS_LINES] lines tall.
  */
 @Composable
 fun PageView(lyrics: TrackLyrics?, modifier: Modifier = Modifier) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
-    Column(modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Column(
+        modifier.height(visibleLyricsHeight(CroonvoxTheme.type.lyricPage)).verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(16.dp)) {
         when (lyrics) {
             null, TrackLyrics.Searching -> Text("Searching Lyrics…", color = muted)
             is TrackLyrics.NotFound, is TrackLyrics.Failed ->

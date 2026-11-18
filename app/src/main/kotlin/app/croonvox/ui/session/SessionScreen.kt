@@ -117,6 +117,7 @@ import app.croonvox.ui.lyrics.KaraokeView
 import app.croonvox.ui.lyrics.PageView
 import app.croonvox.ui.theme.CroonvoxButtonShape
 import app.croonvox.ui.theme.CroonvoxTheme
+import app.croonvox.ui.verticalScrollbar
 import kotlin.math.log10
 import kotlin.math.roundToInt
 
@@ -303,12 +304,16 @@ fun SessionScreen(
         topBar = { TopAppBar(title = { TrackTitle(content.track) }) },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
-        // Lyrics on top, the Track's status and the Session's controls below; each half scrolls on its own.
+        // Lyrics on top, a few lines tall; the Track's status and the Session's controls take the rest
+        // below. Each part scrolls on its own.
         Column(Modifier.fillMaxSize().padding(padding)) {
-            LyricsPane(content, actions, Modifier.weight(1f).fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 16.dp))
+            LyricsPane(content, actions, Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 16.dp))
             HorizontalDivider()
+            val controlsScroll = rememberScrollState()
             Column(
-                modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
+                modifier = Modifier.weight(1f).fillMaxWidth()
+                    .verticalScrollbar(controlsScroll, MaterialTheme.colorScheme.outline.copy(alpha = 0.6f))
+                    .verticalScroll(controlsScroll).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 SessionControls(openError, content, actions)
@@ -331,10 +336,10 @@ private fun LyricsPane(content: SessionContent, actions: SessionActions, modifie
         if (content.karaoke) {
             KaraokeView(
                 lines, content.playback, content.lyricsOffsetMs, actions.onNudgeLyricsOffset, actions.onResetLyricsOffset,
-                Modifier.weight(1f).fillMaxWidth(),
+                Modifier.fillMaxWidth(),
             )
         } else {
-            PageView(content.lyrics, Modifier.weight(1f).fillMaxWidth())
+            PageView(content.lyrics, Modifier.fillMaxWidth())
         }
     }
 }

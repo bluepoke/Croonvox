@@ -42,7 +42,8 @@ import kotlin.math.abs
 
 /**
  * The Karaoke View (GLOSSARY): synced Lyrics that follow the Audio Engine position. The current
- * line is highlighted (semibold, larger, gold); the list keeps it near the top third. Word progress within
+ * line is highlighted (semibold, larger, gold); the list shows [VISIBLE_LYRICS_LINES] lines and keeps the current
+ * one second from the top, so the singer sees what comes next. Word progress within
  * the line isn't drawn: on device, a colour running through the words misled more than it helped.
  */
 @Composable
@@ -56,7 +57,9 @@ fun KaraokeView(
 ) {
     val position = Karaoke.at(lines, playback.positionMs, offsetMs)
     val list = rememberLazyListState()
-    val lead = with(LocalDensity.current) { 96.dp.roundToPx() }
+    val style = CroonvoxTheme.type.lyric
+    // One line plus its spacing: the line already sung stays visible above the current one.
+    val lead = with(LocalDensity.current) { (style.lineHeight.toDp() + LINE_SPACING).roundToPx() }
     LaunchedEffect(position.line) {
         // Before the first line (e.g. after seeking back to the intro) the list goes to the top.
         list.glideTo(maxOf(position.line, 0), lead = if (position.line >= 0) lead else 0)
@@ -65,9 +68,9 @@ fun KaraokeView(
         OffsetControls(offsetMs, onNudgeOffset, onResetOffset)
         LazyColumn(
             state = list,
-            modifier = Modifier.weight(1f).fillMaxWidth(),
+            modifier = Modifier.height(visibleLyricsHeight(style, LINE_SPACING)).fillMaxWidth(),
             contentPadding = PaddingValues(bottom = 240.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            verticalArrangement = Arrangement.spacedBy(LINE_SPACING),
         ) {
             itemsIndexed(lines) { index, line ->
                 val current = index == position.line
@@ -86,7 +89,7 @@ fun KaraokeView(
                 )
                 Text(
                     text = line.text,
-                    style = CroonvoxTheme.type.lyric,
+                    style = style,
                     fontWeight = if (current) FontWeight.SemiBold else FontWeight.Normal,
                     color = color,
                     modifier = Modifier
@@ -161,5 +164,6 @@ private suspend fun LazyListState.glideTo(index: Int, lead: Int) {
     animateScrollBy((item.offset - lead).toFloat(), tween(GLIDE_MS, easing = FastOutSlowInEasing))
 }
 
+private val LINE_SPACING = 14.dp
 private const val GLIDE_MS = 600
 private const val CURRENT_SCALE = 1.15f
