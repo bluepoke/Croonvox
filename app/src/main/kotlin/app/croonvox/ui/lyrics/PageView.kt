@@ -11,18 +11,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.croonvox.core.lyrics.TrackLyrics
 import app.croonvox.core.lyrics.pageText
+import app.croonvox.ui.theme.CroonvoxTheme
 
 /**
- * The Page View (GLOSSARY): the Lyrics as large, readable text that the singer scrolls. Works
+ * The Page View (GLOSSARY): the Lyrics as whole, readable verses that the singer scrolls. Works
  * with plain and synced Lyrics alike.
  */
 @Composable
 fun PageView(lyrics: TrackLyrics?, modifier: Modifier = Modifier) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
-    Column(modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         when (lyrics) {
             null, TrackLyrics.Searching -> Text("Searching Lyrics…", color = muted)
             is TrackLyrics.NotFound, is TrackLyrics.Failed ->
@@ -38,6 +38,6 @@ private fun Page(text: String, caption: String) {
     val stanzas = remember(text) { text.split(Regex("""\n\s*\n""")) }
     Text(caption, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     for (stanza in stanzas) {
-        Text(stanza.trim(), style = MaterialTheme.typography.headlineSmall, lineHeight = 36.sp)
+        Text(stanza.trim(), style = CroonvoxTheme.type.lyricPage, color = MaterialTheme.colorScheme.onSurface)
     }
 }

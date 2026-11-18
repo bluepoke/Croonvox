@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 <resources>
-    <!-- Follows the system dark mode so the window doesn't flash light before Compose draws. -->
-    <style name="Theme.Croonvox" parent="@android:style/Theme.DeviceDefault.DayNight">
-        <item name="android:windowActionBar">false</item>
-        <item name="android:windowNoTitle">true</item>
+    <!-- Always dark, like CroonvoxTheme: the window is Croonvox black before Compose draws. -->
+    <style name="Theme.Croonvox" parent="@android:style/Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowBackground">@color/croonvox_bg</item>
+        <item name="android:colorAccent">@color/croonvox_gold</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
     </style>
 </resources>
