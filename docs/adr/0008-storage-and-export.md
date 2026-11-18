@@ -1,6 +1,6 @@
 # 8. Storage formats and Export (WAV, MP3 via LAME, M4A/AAC via MediaCodec)
 
-- Status: Accepted
+- Status: Accepted, amended by [ADR 18](0018-video-streaming-only-backlog.md) (no offline video; video is streaming only)
 - Date: 2026-11-14
 
 ## Decision

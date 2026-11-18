@@ -6,7 +6,7 @@ Ubiquitous language for the project. Decisions are recorded in `docs/adr/`.
 |---|---|
 | **Source** | A pluggable provider of songs: *search → candidates → resolve to stream/file*. One Source per service: each service behind the NewPipe adapter (YouTube, SoundCloud, …) is its own Source. Its name is the namespace of Track identities (`youtube:<id>`). See ADR 1, ADR 10. |
 | **Local File Source** | Files the user picks or shares into the app. Not searched: the file is *imported* (copied as Original Audio), and its identity is `local:<SHA-256 of the content>`, so the same content always maps to the same Track. |
-| **Track** | A song the user added, identified by Source + source ID. Owns Original Audio, stems per Separation Model, optional video, metadata, Lyrics, Takes and Mixes. See ADR 10. |
+| **Track** | A song the user added, identified by Source + source ID. Owns Original Audio, stems per Separation Model, metadata, Lyrics, Takes and Mixes. See ADR 10. |
 | **Track Pipeline** | Resumable processing states: Added → Downloading → Downloaded → Separating(model) → Ready / Failed. A Vocal-Free Track skips Separating. Deleting the stems moves Ready to Stems Deleted. |
 | **Stems Deleted** | The Track Pipeline state of a Track whose stems the user deleted to free space. Opening the Track separates it again with the same Separation Model; the Original Audio plays meanwhile. See ADR 17. |
 | **Ready** | The Track Pipeline state in which every step the Track needs is done: stems exist, or the Track is Vocal-Free. See ADR 14. |
@@ -18,7 +18,7 @@ Ubiquitous language for the project. Decisions are recorded in `docs/adr/`.
 | **Vocal-Free** | A Track whose Original Audio has no lead vocal (e.g. a karaoke video's audio), so it skips Separation and has no Instrumental or Vocal Stem. Set by the user. See ADR 14. _Avoid_: karaoke track, instrumental track. |
 | **Backing Audio** | Whatever plays under the singer in a Session: Instrumental by default, or Original Audio. Always the Original Audio on a Vocal-Free Track. |
 | **Take** | One microphone recording of the user singing over a Track, at a fixed Transpose. A Track has many Takes. Its audio and timing are never modified after recording; only its name can change. |
-| **Session** | Singing over a Track: Backing Audio plays (video follows the Audio Engine clock), Lyrics display, optional Monitoring, Practice Loop or recording of a Take, then Review. See ADR 9. |
+| **Session** | Singing over a Track: Backing Audio plays, Lyrics display, optional Monitoring, Practice Loop or recording of a Take, then Review. See ADR 9. |
 | **Start Position** | Where on the Track timeline a Take begins; Takes may cover only part of the song. |
 | **Practice Loop** | A–B section looped without recording, for learning a passage. |
 | **Guide Vocal** | The Vocal Stem blended into the headphones (Session) or into a Mix at low level. Never recorded. |
