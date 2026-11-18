@@ -7,7 +7,7 @@ An Android karaoke and singing-practice app. Find a music video, remove the voca
 ## Features (planned for v1)
 
 - **Browse sources**: search music videos on YouTube, SoundCloud, Bandcamp, PeerTube and others through [NewPipeExtractor](https://github.com/TeamNewPipe/NewPipeExtractor), or import local files.
-- **Vocal removal**: on-device source separation into an instrumental and a vocal stem. You choose between a fast and a high-quality model.
+- **Vocal removal**: on-device source separation into an instrumental and a vocal stem. You choose between a fast, a medium and a high-quality model, and set which one is used by default.
 - **Sing and record**: low-latency playback and recording on one sample-accurate timeline.
 - **Real-time monitoring**: hear your own voice dry in wired or USB headphones. Not supported over Bluetooth, because its latency is too high.
 - **Transpose**: shift the key by ±6 semitones without changing the tempo, in real time.

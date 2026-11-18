@@ -1,6 +1,6 @@
 # 15. Separation Model catalogue after the separation spike
 
-- Status: Accepted (amends ADR 3)
+- Status: Accepted (amends ADR 3), amended by [ADR 19](0019-three-separation-models-and-default-model.md) (UVR MDX-Net Karaoke as Medium, pre-selected Default Separation Model)
 - Date: 2026-11-17
 
 ## Context

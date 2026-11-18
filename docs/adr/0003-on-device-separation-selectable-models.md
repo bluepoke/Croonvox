@@ -1,6 +1,6 @@
 # 3. On-device Separation with user-selectable Separation Models
 
-- Status: Accepted, amended by [ADR 15](0015-separation-model-catalogue-after-spike.md) (ONNX Runtime on CPU, Spleeter for Fast, UVR MDX-Net Inst HQ 4 for Best, downloaded on demand)
+- Status: Accepted, amended by [ADR 15](0015-separation-model-catalogue-after-spike.md) (ONNX Runtime on CPU, Spleeter for Fast, UVR MDX-Net Inst HQ 4 for Best, downloaded on demand) and [ADR 19](0019-three-separation-models-and-default-model.md) (UVR MDX-Net Karaoke for Medium, Default Separation Model)
 - Date: 2026-11-14
 
 ## Context
