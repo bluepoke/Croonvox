@@ -15,8 +15,11 @@ import app.croonvox.core.testing.FakePipelineJobs
 import app.croonvox.core.testing.FakeSeparator
 import app.croonvox.core.testing.InMemoryTrackFiles
 import app.croonvox.core.testing.InMemoryTrackRepository
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
 import kotlin.test.Test
@@ -175,5 +178,30 @@ class SeparateTrackTest {
 
         assertEquals(SeparateTrack.Outcome.Skipped, outcome)
         assertEquals(TrackPipelineState.Separating(best), tracks.get(track.id)?.pipeline)
+    }
+
+    @Test
+    fun `after a model switch the new Separation waits until the replaced one has stopped`() = runTest {
+        val best = SeparationModelId("best")
+        val track = import(FakeLocalFile(displayName = "song.mp3", content = "audio-1"))
+        val pipeline = TrackPipeline(tracks, FakePipelineJobs(), defaultModel = fast)
+        // The Fast job is slow to stop: it is stuck in its current block until released.
+        val fastStops = CompletableDeferred<Unit>()
+        separator.afterEachProgress = { if (separator.requests.last().model == fast) fastStops.await() }
+        val fastJob = async { separate(track.id, fast) }
+        runCurrent()
+
+        pipeline.reseparate(track.id, best)
+        val bestJob = async { separate(track.id, best) }
+        runCurrent()
+        // Two Separations of one Track never run at once.
+        assertEquals(listOf(fast), separator.requests.map { it.model })
+
+        fastStops.complete(Unit)
+
+        assertEquals(SeparateTrack.Outcome.Skipped, fastJob.await())
+        assertEquals(SeparateTrack.Outcome.Ready, bestJob.await())
+        assertEquals(listOf(fast, best), separator.requests.map { it.model })
+        assertEquals(TrackPipelineState.Ready(best), tracks.get(track.id)?.pipeline)
     }
 }

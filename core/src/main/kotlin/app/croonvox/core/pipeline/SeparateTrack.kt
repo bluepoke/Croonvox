@@ -16,14 +16,23 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.floor
 
-/** The Separating step of the Track Pipeline (ADR 10, ADR 15). */
+/**
+ * The Separating step of the Track Pipeline (ADR 10, ADR 15). One instance serves every job of the
+ * process: it runs one Separation per Track at a time.
+ */
 class SeparateTrack(
     private val tracks: TrackRepository,
     private val files: TrackFiles,
     private val separator: Separator,
 ) {
+    /** Held by the Separation of each Track while it runs, whatever its model. */
+    private val running = ConcurrentHashMap<TrackId, Mutex>()
+
     enum class Outcome {
         /** The stems are stored and the Track is Ready. */
         Ready,
@@ -44,8 +53,16 @@ class SeparateTrack(
      * already finished it) changes nothing, and neither does one whose Track moves on while it
      * runs (e.g. marked Vocal-Free before the job stopped, ADR 14): every state it writes is
      * written only while the Track still waits for this Separation.
+     *
+     * It starts only once any other Separation of the Track has stopped (#28): a job replaced by a
+     * model switch may take a while to stop after it is cancelled, and two Separations at once
+     * could run out of memory, or write the same checkpoint if both have the same model (a job
+     * of an earlier version and its replacement).
      */
-    suspend operator fun invoke(id: TrackId, model: SeparationModelId): Outcome = coroutineScope {
+    suspend operator fun invoke(id: TrackId, model: SeparationModelId): Outcome =
+        running.computeIfAbsent(id) { Mutex() }.withLock { separate(id, model) }
+
+    private suspend fun separate(id: TrackId, model: SeparationModelId): Outcome = coroutineScope {
         when (val state = tracks.get(id)?.pipeline) {
             TrackPipelineState.Ready(model) -> return@coroutineScope Outcome.Ready
             is TrackPipelineState.Failed -> return@coroutineScope Outcome.Failed

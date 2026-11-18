@@ -69,8 +69,8 @@ class TrackPipeline(
             if (replaced) track.copy(pipeline = TrackPipelineState.Separating(model)) else null
         }
         if (!replaced) return
-        // Then stop the replaced job, so two Separations of one Track never run at once, and only
-        // then queue the new one, which the cancel would stop too.
+        // Then stop the replaced job, and only then queue the new one, which the cancel would stop
+        // too. If the replaced job is slow to stop, the new one waits for it (SeparateTrack).
         jobs.cancelSeparation(id)
         jobs.separate(id, model)
     }

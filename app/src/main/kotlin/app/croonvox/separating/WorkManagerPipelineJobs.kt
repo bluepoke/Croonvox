@@ -64,8 +64,8 @@ class WorkManagerPipelineJobs(private val workManager: WorkManager) : PipelineJo
      * Stops Separation jobs queued by versions before #28, named `separate:<track>` without the
      * model and without the per-Track tag, and waits until they have stopped. Run it before the
      * Track Pipeline starts: it queues each Track still Separating again under the new name, and
-     * the job continues from its checkpoint. Without this, the old job and the new one could run
-     * at once and write the same checkpoint.
+     * the job continues from its checkpoint. Without this, the old job would run first and the new
+     * one would wait for it (SeparateTrack), and cancelling the Track's Separations would miss it.
      */
     suspend fun stopLegacySeparations() {
         val legacy = workManager.getWorkInfosByTagFlow(SeparationWorker.TAG).first()
