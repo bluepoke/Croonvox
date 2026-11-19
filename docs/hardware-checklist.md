@@ -79,3 +79,18 @@ Prerequisites: a Ready Track with a kept Take, a link to share that isn't in the
 5. **Waits for the Take.** Record, and switch while recording: the backing doesn't change and "Switches once this Take is done." shows. After Keep or Discard the new choice plays.
 6. **Before Ready.** While a Track is "Removing vocals", **Instrumental** is greyed out with a reason and the original audio plays. If **Original Audio** is chosen when Separation finishes, it stays on the original audio; otherwise it switches to the Instrumental.
 7. **Last sung.** Open a Track you've never sung and press Back: the Library still says "Not sung yet". Record a Take: the Library shows "Sung 0 minutes ago" or similar.
+
+## Mix and WAV Export (#14)
+
+Prerequisites: a Ready Track, wired headphones, the loopback set-up from #8, and a file manager or audio editor that shows `Music/Croonvox/`. The automated Seam 2 tests (`./gradlew :engine:connectedDebugAndroidTest` on an emulator or device) cover the render's alignment, levels and Transpose. These checks cover what they can't.
+
+1. **Default Mix.** Set the Review Balance to −14 dB, record a Take from 0:30 and keep it. "Mixes (1)" lists "Mix 1 · Take 1 · Instrumental · Backing −14 dB · Vocal 0 dB · Nudge 0 ms".
+2. **Preview.** Open "Edit & export" and tap Preview: the Take plays from its Start Position over the Instrumental, sounding like Review at that balance, and stops by itself at the end of the Take. Drag the Backing and Vocal sliders, and step the Vocal Nudge while it plays: each change is heard at once, without restarting. Stop, close the editor and reopen it: the values are still there.
+3. **Mix on another Backing Audio.** Choose Original for the Mix and preview it: the original vocals play under yours. Stop: the Session plays the Instrumental again at the Take's Start Position. The Track's own "Sing over" choice hasn't changed.
+4. **Export.** Export at 16-bit: the progress runs to 100 % and "Saved to Music/Croonvox/<Title> (Mix 1).wav" shows. Open the file in another app: it is 16-bit stereo at the Track's rate, as long as the Take, and sounds like the preview, including the Take's Transpose. Export again at 24-bit: a second file appears beside it ("… (1).wav"), 24-bit.
+5. **Alignment (loopback).** Record a loopback Take over a passage with clear transients, keep it and export its Mix with Nudge 0. In an editor, the recorded copy sits on the backing as closely as in Review. Export with Nudge +50 ms: it sits 50 ms later.
+6. **Cancel.** Start an Export of a long Take and tap Cancel at about 30 %: the progress goes away and no file (not even a partial one) is in `Music/Croonvox/`. Start one again and close the editor: same result.
+7. **Share.** After an Export, tap Share: the share sheet opens, and sending to another app (e.g. a messenger or Drive) delivers a playable WAV.
+8. **Several Mixes.** Tap "New Mix" on a Take: "Mix 2" opens in the editor. Give it other levels: both Mixes keep their own. Delete Mix 1: the Take and Mix 2 stay. Delete the Take: its Mixes go, and the exported files stay.
+9. **Vocal-Free.** On a Track with a Mix on the Instrumental, turn Vocal-Free on: the Mix now says "Original", and its editor shows no Backing Audio choice. Turn it off and let Separation finish: the Mix stays on Original until you choose Instrumental in its editor.
+10. **Re-separation.** Re-separate a Track with another model while its Mix is on the Instrumental, delete the old model's stems in Storage, then export the Mix: it uses the new Instrumental and stays in sync.

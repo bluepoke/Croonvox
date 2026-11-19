@@ -3,6 +3,7 @@ package app.croonvox.core.session
 
 import app.croonvox.core.library.TrackFiles
 import app.croonvox.core.library.TrackRepository
+import app.croonvox.core.mix.Mixes
 import app.croonvox.core.model.TakeId
 import app.croonvox.core.model.Track
 import app.croonvox.core.model.TrackId
@@ -23,6 +24,7 @@ class Sessions(
     private val files: TrackFiles,
     private val engine: AudioEngine,
     private val settings: SettingsRepository,
+    private val mixes: Mixes,
     private val clock: () -> Long = System::currentTimeMillis,
     private val newTakeId: () -> TakeId = { TakeId(UUID.randomUUID().toString()) },
 ) {
@@ -41,7 +43,7 @@ class Sessions(
         val track = tracks.getForOpening(id)
         // Its screen may be torn down only after the new one opened; it must not touch the engine then.
         current?.close()
-        val deps = Session.Dependencies(tracks, takes, files, engine, settings, clock, newTakeId)
+        val deps = Session.Dependencies(tracks, takes, files, engine, settings, mixes, clock, newTakeId)
         Session.open(track, scope, deps, onProgress).also { current = it }
     }
 }

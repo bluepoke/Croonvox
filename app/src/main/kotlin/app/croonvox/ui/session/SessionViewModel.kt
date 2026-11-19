@@ -8,6 +8,12 @@ import app.croonvox.core.lyrics.LyricsOffset
 import app.croonvox.core.lyrics.LyricsRepository
 import app.croonvox.core.lyrics.MatchLyrics
 import app.croonvox.core.lyrics.TrackLyrics
+import app.croonvox.core.mix.ExportMix
+import app.croonvox.core.mix.Mix
+import app.croonvox.core.mix.MixId
+import app.croonvox.core.mix.MixSettings
+import app.croonvox.core.mix.MixUnavailable
+import app.croonvox.core.mix.Mixes
 import app.croonvox.core.model.BackingChoice
 import app.croonvox.core.model.SeparationModelId
 import app.croonvox.core.model.Take
@@ -17,6 +23,8 @@ import app.croonvox.core.model.TrackId
 import app.croonvox.core.model.Transpose
 import app.croonvox.core.pipeline.TrackPipeline
 import app.croonvox.core.pipeline.VocalFreeToggle
+import app.croonvox.core.port.ExportFormat
+import app.croonvox.core.port.ExportedFile
 import app.croonvox.core.port.InputLevel
 import app.croonvox.core.port.Playback
 import app.croonvox.core.session.BackingAudio
@@ -28,6 +36,7 @@ import app.croonvox.separating.ModelChoices
 import app.croonvox.separating.ModelOption
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -36,6 +45,8 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
@@ -54,6 +65,8 @@ class SessionViewModel(
     private val lyricsOffset: LyricsOffset,
     private val vocalFree: VocalFreeToggle,
     private val choices: ModelChoices,
+    private val mixes: Mixes,
+    private val exportMix: ExportMix,
 ) : ViewModel() {
     /** The Track as it is now: Track Pipeline, Vocal-Free, Backing Audio choice. */
     val track: StateFlow<Track?> = tracks.observe(id).stateIn(viewModelScope, SharingStarted.Eagerly, null)
@@ -243,16 +256,129 @@ class SessionViewModel(
                 throw e
             } catch (e: MicrophoneUnavailable) {
                 _message.value = "The microphone can't be opened. Check that Croonvox may use it."
+            } catch (e: MixUnavailable) {
+                _message.value = e.reason
             } catch (e: Exception) {
                 _message.value = e.message ?: e::class.simpleName
             }
         }
     }
 
+    // --- Mixes (#14) ---
+
+    /** The Track's Mixes, oldest first. */
+    val trackMixes: StateFlow<List<Mix>> = mixes.observe(id).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    private val _editor = MutableStateFlow<MixEditor?>(null)
+
+    /** The Mix Editor while it is open. */
+    val editor: StateFlow<MixEditor?> = _editor
+
+    private var exportJob: Job? = null
+
+    /** A new Mix of a kept Take, opened in the editor. */
+    fun newMix(take: TakeId) {
+        viewModelScope.launch { editMix(mixes.create(take)) }
+    }
+
+    /** Opens the Mix Editor on [mix]; its stored Mix Settings are the starting point. */
+    fun editMix(mix: Mix) {
+        if (_editor.value != null) closeMixEditor()
+        _editor.value = MixEditor(mix.id, mix.settings)
+    }
+
+    /** Mix Settings being edited: heard at once in a running preview, stored by [saveMixSettings]. */
+    fun editMixSettings(settings: MixSettings) {
+        _editor.update { it?.copy(settings = settings) }
+        act { it.setPreviewSettings(settings) }
+    }
+
+    /** Stores the Mix Settings being edited (e.g. when a slider is let go). */
+    fun saveMixSettings() {
+        val editor = _editor.value ?: return
+        viewModelScope.launch { mixes.updateSettings(editor.mix, editor.settings) }
+    }
+
+    fun chooseMixBacking(choice: BackingChoice) {
+        val editor = _editor.value ?: return
+        viewModelScope.launch {
+            if (!mixes.chooseBacking(editor.mix, choice)) _message.value = "The instrumental isn't ready yet."
+        }
+    }
+
+    /** Plays the Mix being edited as it will be exported, with the settings being edited. */
+    fun previewMix() {
+        val editor = _editor.value ?: return
+        act {
+            mixes.updateSettings(editor.mix, editor.settings)
+            if (!it.previewMix(editor.mix)) _message.value = "This Mix can't be played."
+        }
+    }
+
+    /** Exports the Mix being edited as WAV to Music/Croonvox (#14). Leaving the screen cancels it. */
+    fun exportMix(bitsPerSample: Int) {
+        val editor = _editor.value ?: return
+        if (editor.export is ExportProgress.Running) return
+        exportJob = viewModelScope.launch {
+            mixes.updateSettings(editor.mix, editor.settings)
+            updateExport(editor.mix, ExportProgress.Running(0f))
+            val result = try {
+                // Progress comes from the render's thread; a late one must not outlive the Export.
+                val file = exportMix.export(editor.mix, ExportFormat.Wav(bitsPerSample)) { progress ->
+                    if (isActive) updateExport(editor.mix, ExportProgress.Running(progress))
+                }
+                ExportProgress.Done(file)
+            } catch (e: CancellationException) {
+                updateExport(editor.mix, null)
+                throw e
+            } catch (e: MixUnavailable) {
+                ExportProgress.Failed(e.reason)
+            } catch (e: Exception) {
+                ExportProgress.Failed(e.message ?: e::class.simpleName.orEmpty())
+            }
+            updateExport(editor.mix, result)
+        }
+    }
+
+    fun cancelExport() {
+        exportJob?.cancel()
+        exportJob = null
+    }
+
+    /** Shows [export] in the editor, if it is still open on [mix]. */
+    private fun updateExport(mix: MixId, export: ExportProgress?) {
+        _editor.update { if (it?.mix == mix) it.copy(export = export) else it }
+    }
+
+    /** Closes the editor: stores its settings, stops the preview and cancels an Export still running. */
+    fun closeMixEditor() {
+        saveMixSettings()
+        cancelExport()
+        if (state.value is SessionState.PreviewingMix) stop()
+        _editor.value = null
+    }
+
+    fun deleteMix(mix: MixId) {
+        if (_editor.value?.mix == mix) closeMixEditor()
+        viewModelScope.launch { mixes.delete(mix) }
+    }
+
     override fun onCleared() {
         // Does nothing if the next Track's Session has closed it already.
         session.value?.close()
     }
+}
+
+/** The Mix Editor: the Mix, the Mix Settings being edited, and its Export, if one was started. */
+data class MixEditor(val mix: MixId, val settings: MixSettings, val export: ExportProgress? = null)
+
+/** Where an Export from the Mix Editor is. */
+sealed interface ExportProgress {
+    data class Running(val progress: Float) : ExportProgress
+
+    data class Done(val file: ExportedFile) : ExportProgress
+
+    data class Failed(val reason: String) : ExportProgress
 }
 
 /** The model picker on the Track screen (ADR 19): for re-separating, or for unmarking Vocal-Free. */

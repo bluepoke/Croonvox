@@ -43,8 +43,11 @@ FetchContent_MakeAvailable(flac)
 find_package(oboe REQUIRED CONFIG)
 
 add_library(croonvox_engine SHARED
+        BackingRenderer.cpp
         PlaybackEngine.cpp
+        OfflineMixRender.cpp
         jni_bridge.cpp
+        mix_render_jni.cpp
         flac_files.cpp
 )
 

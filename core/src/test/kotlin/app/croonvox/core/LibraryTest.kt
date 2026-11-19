@@ -3,6 +3,7 @@ package app.croonvox.core
 
 import app.croonvox.core.library.Library
 import app.croonvox.core.library.LibraryEntry
+import app.croonvox.core.mix.Mixes
 import app.croonvox.core.model.OutputRoute
 import app.croonvox.core.model.SeparationModelId
 import app.croonvox.core.model.SourceId
@@ -14,6 +15,7 @@ import app.croonvox.core.model.Transpose
 import app.croonvox.core.session.Sessions
 import app.croonvox.core.testing.FakeAudioEngine
 import app.croonvox.core.testing.FakeSource
+import app.croonvox.core.testing.InMemoryMixRepository
 import app.croonvox.core.testing.InMemorySettingsRepository
 import app.croonvox.core.testing.InMemoryTakeRepository
 import app.croonvox.core.testing.InMemoryTrackFiles
@@ -77,7 +79,7 @@ class LibraryTest {
         takes.add(take("t1", sung.id))
         takes.add(take("t2", sung.id))
         val files = InMemoryTrackFiles()
-        val sessions = Sessions(tracks, takes, files, FakeAudioEngine(), InMemorySettingsRepository(), clock = { SUNG_AT })
+        val sessions = Sessions(tracks, takes, files, FakeAudioEngine(), InMemorySettingsRepository(), Mixes(tracks, takes, InMemoryMixRepository(), files, InMemorySettingsRepository()), clock = { SUNG_AT })
 
         sessions.open(sung.id, backgroundScope).apply {
             record() // sung: a Take started recording

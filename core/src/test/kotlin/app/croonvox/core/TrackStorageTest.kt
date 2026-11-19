@@ -3,6 +3,9 @@ package app.croonvox.core
 
 import app.croonvox.core.library.TakeUsage
 import app.croonvox.core.library.TrackStorage
+import app.croonvox.core.mix.Mix
+import app.croonvox.core.mix.MixId
+import app.croonvox.core.mix.MixSettings
 import app.croonvox.core.model.OutputRoute
 import app.croonvox.core.model.SeparationModelId
 import app.croonvox.core.model.SourceId
@@ -12,7 +15,9 @@ import app.croonvox.core.model.Track
 import app.croonvox.core.model.TrackId
 import app.croonvox.core.model.TrackPipelineState
 import app.croonvox.core.model.Transpose
+import app.croonvox.core.session.BackingAudio
 import app.croonvox.core.testing.FakePipelineJobs
+import app.croonvox.core.testing.InMemoryMixRepository
 import app.croonvox.core.testing.InMemoryTakeRepository
 import app.croonvox.core.testing.InMemoryTrackFiles
 import app.croonvox.core.testing.InMemoryTrackRepository
@@ -27,7 +32,8 @@ class TrackStorageTest {
     private val takes = InMemoryTakeRepository()
     private val files = InMemoryTrackFiles()
     private val jobs = FakePipelineJobs()
-    private val storage = TrackStorage(tracks, takes, files, jobs, models = listOf(FAST, BEST))
+    private val mixes = InMemoryMixRepository()
+    private val storage = TrackStorage(tracks, takes, mixes, files, jobs, models = listOf(FAST, BEST))
     private val trackId = TrackId(SourceId("youtube"), "abc")
 
     private suspend fun addTrack(pipeline: TrackPipelineState, id: TrackId = trackId) =
@@ -39,6 +45,9 @@ class TrackStorageTest {
         files.store(files.take(track, take.id), bytes)
         return take
     }
+
+    private fun mixOf(take: Take) =
+        Mix(MixId("mix of ${take.name}"), take.track, take.id, "Mix", BackingAudio.OriginalAudio, MixSettings(backingDb = -20f), createdAt = 0)
 
     @Test
     fun `usage is shown per Track by category, with stems per Separation Model`() = runTest {
@@ -101,17 +110,21 @@ class TrackStorageTest {
         val first = keepTake("Take 1", 2_000_000)
         val second = keepTake("Take 2", 3_000_000)
 
+        mixes.add(mixOf(first))
+        val kept = mixOf(second).also { mixes.add(it) }
+
         storage.deleteTake(first)
 
         assertEquals(listOf(TakeUsage(second, 3_000_000)), storage.usage().single().takes)
         assertEquals(listOf(files.take(trackId, first.id)), files.deletedTakes)
+        assertEquals(listOf(kept), mixes.observe(trackId).first())
     }
 
     @Test
     fun `deleting a Track stops its jobs and removes it with everything it owns`() = runTest {
         addTrack(TrackPipelineState.Separating(FAST))
         files.store(files.originalAudio(trackId), 4_000_000)
-        keepTake("Take 1", 2_000_000)
+        mixes.add(mixOf(keepTake("Take 1", 2_000_000)))
         val other = TrackId(SourceId("youtube"), "other")
         addTrack(TrackPipelineState.Ready(FAST), id = other)
 
@@ -120,6 +133,7 @@ class TrackStorageTest {
         assertEquals(listOf(trackId), jobs.cancelled)
         assertEquals(null, tracks.get(trackId))
         assertEquals(emptyList(), takes.observe(trackId).first())
+        assertEquals(emptyList(), mixes.observe(trackId).first())
         assertEquals(listOf(trackId), files.deleted)
         assertEquals(listOf(other), storage.usage().map { it.track.id })
     }

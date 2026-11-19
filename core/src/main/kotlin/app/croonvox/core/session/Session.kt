@@ -3,6 +3,12 @@ package app.croonvox.core.session
 
 import app.croonvox.core.library.TrackFiles
 import app.croonvox.core.library.TrackRepository
+import app.croonvox.core.mix.Mix
+import app.croonvox.core.mix.MixId
+import app.croonvox.core.mix.MixSettings
+import app.croonvox.core.mix.Mixes
+import app.croonvox.core.mix.alignmentFrames
+import app.croonvox.core.mix.fileOf
 import app.croonvox.core.model.AudioFile
 import app.croonvox.core.model.BackingChoice
 import app.croonvox.core.model.SeparationModelId
@@ -47,6 +53,7 @@ class Session private constructor(
         val files: TrackFiles,
         val engine: AudioEngine,
         val settings: SettingsRepository,
+        val mixes: Mixes,
         val clock: () -> Long,
         val newTakeId: () -> TakeId,
     )
@@ -70,8 +77,11 @@ class Session private constructor(
      */
     val backing: StateFlow<BackingAudio> = _backing
 
-    /** Backing Audio that became available while the Session was busy; loaded once it is [SessionState.Idle]. */
-    private var pendingBacking: BackingAudio? = null
+    /**
+     * What the Track wants to play now ([backingAudio]). While the Session is busy, or a Mix Preview
+     * plays its own Backing Audio, it is loaded once the Session is [SessionState.Idle] again.
+     */
+    private var wantedBacking: BackingAudio = track.backingAudio()
 
     private var load: LoadId? = null
 
@@ -166,7 +176,7 @@ class Session private constructor(
     private val _reviewBackingDb = MutableStateFlow(DEFAULT_REVIEW_BACKING_DB)
 
     /**
-     * Review balance: level of the Backing Audio, in dB, while a Take plays back (Review and kept
+     * Review Balance: level of the Backing Audio, in dB, while a Take plays back (Review and kept
      * Takes). Lower than the Take by default, because an unprocessed voice is far quieter than a
      * mastered song. Only for listening; the Mix sets the real balance (ADR 7).
      */
@@ -194,7 +204,7 @@ class Session private constructor(
         runCountdown(countdown)
     }
 
-    /** Ends the countdown, stops recording (and goes to Review) or stops playing a kept Take. */
+    /** Ends the countdown, stops recording (and goes to Review), or stops playing a kept Take or a Mix Preview. */
     suspend fun stop() = mutex.withLock {
         when (_state.value) {
             is SessionState.CountingDown -> becomeIdleLocked()
@@ -203,6 +213,7 @@ class Session private constructor(
                 engine.clearTake()
                 becomeIdleLocked()
             }
+            is SessionState.PreviewingMix -> endPreviewLocked()
             else -> Unit
         }
     }
@@ -214,8 +225,8 @@ class Session private constructor(
     }
 
     /**
-     * Keeps the Take in Review: its audio is written as mono FLAC, then it is stored and listed.
-     * Returns the stored Take.
+     * Keeps the Take in Review: its audio is written as mono FLAC, then it is stored and listed,
+     * with a default Mix over the Backing Audio it was sung over (#14). Returns the stored Take.
      */
     suspend fun keep(): Take = mutex.withLock {
         val review = _state.value as? SessionState.Review ?: error("no Take in Review")
@@ -236,6 +247,8 @@ class Session private constructor(
             recordedAt = deps.clock(),
         )
         deps.takes.add(take)
+        // The Backing Audio doesn't switch during Review, so this is what the Take was sung over.
+        deps.mixes.add(take, _backing.value)
         leaveReviewLocked(captured)
         take
     }
@@ -284,16 +297,79 @@ class Session private constructor(
         if (trimmed.isNotEmpty()) deps.takes.rename(take, trimmed)
     }
 
-    /** Deletes a kept Take and its audio. */
+    /** Deletes a kept Take, its Mixes and its audio. */
     suspend fun delete(take: TakeId) = mutex.withLock {
-        val playing = _state.value as? SessionState.PlayingTake
-        if (playing?.take?.id == take) {
-            engine.clearTake()
-            becomeIdleLocked()
+        when (val state = _state.value) {
+            is SessionState.PlayingTake -> if (state.take.id == take) {
+                engine.clearTake()
+                becomeIdleLocked()
+            }
+            is SessionState.PreviewingMix -> if (state.take.id == take) endPreviewLocked()
+            else -> Unit
         }
-        // Row first, then the file: the list never shows a Take whose audio is gone.
+        // Rows first, then the file: the list never shows a Take whose audio is gone.
+        deps.mixes.deleteForTake(take)
         deps.takes.delete(take)
         deps.files.deleteTake(track.id, take)
+    }
+
+    // --- Mix Preview (#14) ---
+
+    /**
+     * Plays a Mix as it will be exported (only while [SessionState.Idle]): its Take over its own
+     * Backing Audio at the Take's Transpose, with the Mix's levels and Vocal Nudge, from the Take's
+     * Start Position until it ends. The Offline Render uses the same DSP. Afterwards the Session plays
+     * its own Backing Audio again. Returns false if the Take's audio can't be played.
+     * @throws app.croonvox.core.mix.MixUnavailable if the Mix can't be played now.
+     */
+    suspend fun previewMix(id: MixId): Boolean = mutex.withLock {
+        if (_state.value != SessionState.Idle) return@withLock false
+        val parts = deps.mixes.resolve(id)
+        engine.pause()
+        // The Take is held in memory with the Backing Audio, so load the backing first: a load drops it.
+        if (parts.backing != _backing.value) {
+            loadBacking(parts.backing)
+            // It decodes from the start: wait until it reaches the Take, or the preview starts over silence.
+            val needed = parts.take.startPositionMs + PREVIEW_BUFFER_MS
+            engine.playback.first { it.bufferedMs >= minOf(needed, it.durationMs) }
+        }
+        if (!engine.loadTake(deps.files.take(track.id, parts.take.id), parts.take.startFrame)) {
+            becomeIdleLocked(parts.take.startPositionMs)
+            return@withLock false
+        }
+        _state.value = SessionState.PreviewingMix(parts.mix, parts.take, parts.mix.settings)
+        applyMixLevels(parts.mix.settings)
+        if (!engine.playTake(parts.alignmentFrames(), parts.take.transpose)) {
+            endPreviewLocked()
+            return@withLock false
+        }
+        true
+    }
+
+    /**
+     * Mix Settings being edited, heard at once in the running preview; they are stored separately
+     * ([app.croonvox.core.mix.Mixes.updateSettings]).
+     */
+    suspend fun setPreviewSettings(settings: MixSettings) = mutex.withLock {
+        val preview = _state.value as? SessionState.PreviewingMix ?: return@withLock
+        _state.value = preview.copy(settings = settings)
+        applyMixLevels(settings)
+        engine.setTakeAlignment(preview.take.alignmentFrames(settings))
+    }
+
+    private fun applyMixLevels(settings: MixSettings) {
+        engine.setReviewBackingGain(settings.backingDb)
+        engine.setTakeGain(settings.vocalDb)
+    }
+
+    /** Back to free playback at the Take's Start Position, with the Review Balance and the Session's own Backing Audio. */
+    private suspend fun endPreviewLocked() {
+        val preview = _state.value as SessionState.PreviewingMix
+        engine.clearTake()
+        engine.setReviewBackingGain(_reviewBackingDb.value)
+        engine.setTakeGain(0f)
+        engine.seekTo(preview.take.startPositionMs)
+        becomeIdleLocked(preview.take.startPositionMs)
     }
 
     private val closed = AtomicBoolean(false)
@@ -379,12 +455,11 @@ class Session private constructor(
      */
     private suspend fun becomeIdleLocked(positionMs: Long? = null) {
         _state.value = SessionState.Idle
-        pendingBacking?.let { switchBackingLocked(it, positionMs ?: engine.playback.value.positionMs, resume = false) }
+        switchBackingLocked(wantedBacking, positionMs ?: engine.playback.value.positionMs, resume = false)
     }
 
     /** Loads [backing] and continues at [positionMs]; the stems are sample-aligned with the Original Audio. */
     private suspend fun switchBackingLocked(backing: BackingAudio, positionMs: Long, resume: Boolean) {
-        pendingBacking = null
         if (backing == _backing.value) return
         loadBacking(backing)
         engine.seekTo(positionMs)
@@ -402,6 +477,8 @@ class Session private constructor(
         _countdownEnabled.value = deps.settings.countdownEnabled()
         _reviewBackingDb.value = deps.settings.reviewBackingDb() ?: DEFAULT_REVIEW_BACKING_DB
         engine.setReviewBackingGain(_reviewBackingDb.value)
+        // A Session left during a Mix Preview may have left its vocal level behind.
+        engine.setTakeGain(0f)
         engine.beginSession()
         engine.setTranspose(_transpose.value)
         loadBacking(track.backingAudio(), onProgress)
@@ -433,6 +510,10 @@ class Session private constructor(
                             becomeIdleLocked()
                         }
                     }
+                } else if (state is SessionState.PreviewingMix && !playback.playingTake) {
+                    mutex.withLock {
+                        if (_state.value is SessionState.PreviewingMix && !engine.playback.value.playingTake) endPreviewLocked()
+                    }
                 }
             }
         }
@@ -441,11 +522,10 @@ class Session private constructor(
             // under a Take that is being recorded, reviewed or played back.
             deps.tracks.observe(track.id).filterNotNull().map { it.backingAudio() }.distinctUntilChanged().collect { backing ->
                 mutex.withLock {
+                    wantedBacking = backing
                     if (_state.value == SessionState.Idle) {
                         val now = engine.playback.value
                         switchBackingLocked(backing, now.positionMs, resume = now.playing)
-                    } else {
-                        pendingBacking = backing
                     }
                 }
             }
@@ -460,10 +540,7 @@ class Session private constructor(
         }
     }
 
-    private fun fileOf(backing: BackingAudio): AudioFile = when (backing) {
-        BackingAudio.OriginalAudio -> deps.files.originalAudio(track.id)
-        is BackingAudio.Instrumental -> deps.files.stems(track.id, backing.model).instrumental
-    }
+    private fun fileOf(backing: BackingAudio): AudioFile = deps.files.fileOf(track.id, backing)
 
     companion object {
         /** Length of the countdown before recording (time-based, ADR 9). */
@@ -472,6 +549,9 @@ class Session private constructor(
         const val MAX_INPUT_GAIN_DB = 24f
         const val DEFAULT_REVIEW_BACKING_DB = -20f
         const val MIN_REVIEW_BACKING_DB = -40f
+
+        /** Backing Audio decoded past a Take's Start Position before its Mix Preview starts. */
+        private const val PREVIEW_BUFFER_MS = 2_000L
 
         internal suspend fun open(track: Track, scope: CoroutineScope, deps: Dependencies, onProgress: (Float) -> Unit): Session =
             Session(track, scope, deps).also { it.start(onProgress) }
@@ -514,6 +594,9 @@ sealed interface SessionState {
 
     /** A kept [take] plays against the Backing Audio. */
     data class PlayingTake(val take: Take) : SessionState
+
+    /** [mix] plays as it will be exported, with [settings] being edited (#14). */
+    data class PreviewingMix(val mix: Mix, val take: Take, val settings: MixSettings) : SessionState
 }
 
 /** The microphone can't be opened (no permission or no input device). */

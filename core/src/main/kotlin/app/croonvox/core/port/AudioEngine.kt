@@ -104,6 +104,18 @@ interface AudioEngine {
      */
     fun setReviewBackingGain(gainDb: Float)
 
+    /**
+     * Gain of the held Take audio, in dB, while it plays ([playTake]); 0 dB until set. The Mix Preview
+     * sets its vocal level; Review plays the Take as recorded.
+     */
+    fun setTakeGain(gainDb: Float)
+
+    /**
+     * Changes the alignment of Take playback while it runs, as passed to [playTake], e.g. when the
+     * Vocal Nudge of a Mix being previewed changes.
+     */
+    fun setTakeAlignment(alignmentFrames: Long)
+
     /** Drops the held Take audio, stopping its playback. */
     fun clearTake()
 }

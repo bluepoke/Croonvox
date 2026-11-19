@@ -38,6 +38,8 @@ internal object NativePlayback {
     external fun inputEnabled(handle: Long): Boolean
     external fun setInputGain(handle: Long, linear: Float)
     external fun setReviewBackingGain(handle: Long, linear: Float)
+    external fun setTakeGain(handle: Long, linear: Float)
+    external fun setTakeAlignment(handle: Long, alignmentFrames: Long)
     external fun inputPeak(handle: Long): Float
     external fun clipCount(handle: Long): Long
     external fun outputDeviceId(handle: Long): Int

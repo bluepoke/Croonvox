@@ -242,6 +242,15 @@ class OboeAudioEngine(context: Context) : AudioEngine {
         scope.launch { NativePlayback.setReviewBackingGain(handle, linear) }
     }
 
+    override fun setTakeGain(gainDb: Float) {
+        val linear = 10f.pow(gainDb / 20f)
+        scope.launch { NativePlayback.setTakeGain(handle, linear) }
+    }
+
+    override fun setTakeAlignment(alignmentFrames: Long) {
+        scope.launch { NativePlayback.setTakeAlignment(handle, alignmentFrames) }
+    }
+
     override suspend fun startRecording(fromMs: Long, transpose: Transpose): Boolean = withContext(control) {
         val rate = NativePlayback.sampleRate(handle)
         if (rate <= 0) return@withContext false

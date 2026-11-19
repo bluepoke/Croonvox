@@ -1,28 +1,35 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package app.croonvox.core
 
+import app.croonvox.core.mix.Mix
+import app.croonvox.core.mix.MixId
+import app.croonvox.core.mix.MixSettings
+import app.croonvox.core.mix.Mixes
 import app.croonvox.core.model.PipelineStep
 import app.croonvox.core.model.SeparationModelId
 import app.croonvox.core.model.SourceId
+import app.croonvox.core.model.TakeId
 import app.croonvox.core.model.Track
 import app.croonvox.core.model.TrackId
 import app.croonvox.core.model.TrackPipelineState
 import app.croonvox.core.pipeline.DefaultSeparationModel
-import app.croonvox.core.pipeline.TrackPipeline
 import app.croonvox.core.pipeline.SeparateTrack
+import app.croonvox.core.pipeline.TrackPipeline
 import app.croonvox.core.pipeline.VocalFreeToggle
+import app.croonvox.core.port.SeparationProgress
 import app.croonvox.core.session.BackingAudio
 import app.croonvox.core.session.Sessions
 import app.croonvox.core.session.backingAudio
-import app.croonvox.core.port.SeparationProgress
 import app.croonvox.core.testing.FakeAudioEngine
 import app.croonvox.core.testing.FakePipelineJobs
 import app.croonvox.core.testing.FakeSeparator
+import app.croonvox.core.testing.InMemoryMixRepository
 import app.croonvox.core.testing.InMemorySettingsRepository
 import app.croonvox.core.testing.InMemoryTakeRepository
 import app.croonvox.core.testing.InMemoryTrackFiles
 import app.croonvox.core.testing.InMemoryTrackRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -35,7 +42,8 @@ class VocalFreeTest {
     private val tracks = InMemoryTrackRepository()
     private val files = InMemoryTrackFiles()
     private val jobs = FakePipelineJobs()
-    private val vocalFree = VocalFreeToggle(tracks, files, jobs, models = listOf(FAST, BEST))
+    private val mixes = InMemoryMixRepository()
+    private val vocalFree = VocalFreeToggle(tracks, files, jobs, mixes, models = listOf(FAST, BEST))
     private val pipeline = TrackPipeline(tracks, jobs, DefaultSeparationModel(InMemorySettingsRepository(), listOf(FAST, BEST), fallback = FAST))
     private val id = TrackId(SourceId.Local, "abc")
 
@@ -91,7 +99,7 @@ class VocalFreeTest {
         val engine = FakeAudioEngine()
 
         vocalFree.mark(id)
-        Sessions(tracks, InMemoryTakeRepository(), files, engine, InMemorySettingsRepository()).open(id, backgroundScope)
+        Sessions(tracks, InMemoryTakeRepository(), files, engine, InMemorySettingsRepository(), Mixes(tracks, InMemoryTakeRepository(), InMemoryMixRepository(), files, InMemorySettingsRepository())).open(id, backgroundScope)
 
         assertEquals(TrackPipelineState.Ready(model = null), tracks.get(id)?.pipeline)
         assertEquals(files.originalAudio(id), engine.playback.value.loaded)
@@ -142,7 +150,34 @@ class VocalFreeTest {
         assertEquals(5_000_000, files.sizeOf(files.separationCheckpoint(id, FAST)))
     }
 
+    @Test
+    fun `marking a Track switches its Mixes on the Instrumental to the Original Audio, which keeps them aligned`() = runTest {
+        addTrack(TrackPipelineState.Ready(FAST))
+        mixes.add(mix("m1", BackingAudio.Instrumental(FAST)))
+        mixes.add(mix("m2", BackingAudio.OriginalAudio))
+
+        vocalFree.mark(id)
+
+        assertEquals(listOf(BackingAudio.OriginalAudio, BackingAudio.OriginalAudio), mixes.observe(id).first().map { it.backing })
+        assertEquals(listOf(MIX_SETTINGS, MIX_SETTINGS), mixes.observe(id).first().map { it.settings })
+    }
+
+    @Test
+    fun `unmarking a Track leaves its Mixes on the Original Audio`() = runTest {
+        addTrack(TrackPipelineState.Ready(model = null), vocalFree = true)
+        mixes.add(mix("m1", BackingAudio.OriginalAudio))
+
+        vocalFree.unmark(id, FAST)
+        SeparateTrack(tracks, files, FakeSeparator())(id, FAST)
+
+        assertEquals(BackingAudio.OriginalAudio, mixes.get(MixId("m1"))?.backing)
+    }
+
+    private fun mix(id: String, backing: BackingAudio) =
+        Mix(MixId(id), this.id, TakeId("t1"), "Mix $id", backing, MIX_SETTINGS, createdAt = id.hashCode().toLong())
+
     private companion object {
+        val MIX_SETTINGS = MixSettings(backingDb = -20f, vocalDb = 2f, vocalNudgeMs = 10)
         val FAST = SeparationModelId("fast")
         val BEST = SeparationModelId("best")
     }

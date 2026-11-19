@@ -107,7 +107,7 @@ class MainActivity : ComponentActivity() {
                         SessionRoute(
                             id, container.trackRepository, container.sessions, container.trackPipeline,
                             container.lyricsRepository, container.matchLyrics, container.lyricsOffset, container.vocalFreeToggle,
-                            container.modelChoices,
+                            container.modelChoices, container.mixes, container.exportMix,
                             onChooseLyrics = { nav.navigate(route(LYRICS, id)) },
                         )
                     }

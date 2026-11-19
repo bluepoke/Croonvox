@@ -85,6 +85,10 @@ import app.croonvox.core.lyrics.LyricsRepository
 import app.croonvox.core.lyrics.MatchLyrics
 import app.croonvox.core.lyrics.TrackLyrics
 import app.croonvox.core.lyrics.candidate
+import app.croonvox.core.mix.ExportMix
+import app.croonvox.core.mix.Mix
+import app.croonvox.core.mix.MixId
+import app.croonvox.core.mix.Mixes
 import app.croonvox.core.model.BackingChoice
 import app.croonvox.core.model.InputDevice
 import app.croonvox.core.model.OutputRoute
@@ -134,11 +138,13 @@ fun SessionRoute(
     lyricsOffset: LyricsOffset,
     vocalFreeToggle: VocalFreeToggle,
     choices: ModelChoices,
+    mixes: Mixes,
+    exportMix: ExportMix,
     onChooseLyrics: () -> Unit,
 ) {
     val viewModel: SessionViewModel = viewModel(
         factory = viewModelFactory {
-            initializer { SessionViewModel(id, tracks, sessions, pipeline, lyrics, match, lyricsOffset, vocalFreeToggle, choices) }
+            initializer { SessionViewModel(id, tracks, sessions, pipeline, lyrics, match, lyricsOffset, vocalFreeToggle, choices, mixes, exportMix) }
         },
     )
     val context = LocalContext.current
@@ -197,6 +203,27 @@ fun SessionRoute(
     val offsetMs by viewModel.lyricsOffsetMs.collectAsStateWithLifecycle()
     val karaoke by viewModel.karaoke.collectAsStateWithLifecycle()
     val transpose by viewModel.transpose.collectAsStateWithLifecycle()
+    val mixes by viewModel.trackMixes.collectAsStateWithLifecycle()
+    val editor by viewModel.editor.collectAsStateWithLifecycle()
+    editor?.let { open ->
+        val mix = mixes.firstOrNull { it.id == open.mix }
+        val shownTrack = track
+        if (mix != null && shownTrack != null) {
+            MixEditorSheet(
+                open, mix, takes.firstOrNull { it.id == mix.take }, shownTrack, state, playback,
+                MixEditorActions(
+                    onSettings = viewModel::editMixSettings,
+                    onSettingsDone = viewModel::saveMixSettings,
+                    onBacking = viewModel::chooseMixBacking,
+                    onPreview = viewModel::previewMix,
+                    onStop = viewModel::stop,
+                    onExport = viewModel::exportMix,
+                    onCancelExport = viewModel::cancelExport,
+                    onClose = viewModel::closeMixEditor,
+                ),
+            )
+        }
+    }
 
     SessionScreen(
         openError = openError,
@@ -204,6 +231,7 @@ fun SessionRoute(
         content = SessionContent(
             track, loadProgress, state, backing, playback, input, gain, countdown, reviewBacking, takes, trackLyrics, offsetMs, karaoke, transpose,
             modelName = choices::nameOf,
+            mixes = mixes,
         ),
         actions = SessionActions(
             onTogglePlay = viewModel::togglePlay,
@@ -231,6 +259,9 @@ fun SessionRoute(
             onChooseLyrics = onChooseLyrics,
             onVocalFree = viewModel::setVocalFree,
             onReseparate = viewModel::startReseparating,
+            onNewMix = viewModel::newMix,
+            onEditMix = viewModel::editMix,
+            onDeleteMix = viewModel::deleteMix,
         ),
     )
 }
@@ -287,7 +318,7 @@ data class SessionContent(
     val input: InputLevel,
     val inputGainDb: Float,
     val countdownEnabled: Boolean,
-    /** Backing Audio level while a Take plays back, in dB (Review balance). */
+    /** Backing Audio level while a Take plays back, in dB (Review Balance). */
     val reviewBackingDb: Float,
     val takes: List<Take>,
     val lyrics: TrackLyrics?,
@@ -298,6 +329,8 @@ data class SessionContent(
     val transpose: Transpose,
     /** A Separation Model's name in the picker ("Fast", "Best"). */
     val modelName: (SeparationModelId) -> String = { it.value },
+    /** The Track's Mixes, oldest first (#14). */
+    val mixes: List<Mix> = emptyList(),
 )
 
 data class SessionActions(
@@ -326,6 +359,9 @@ data class SessionActions(
     val onChooseLyrics: () -> Unit = {},
     val onVocalFree: (Boolean) -> Unit = {},
     val onReseparate: () -> Unit = {},
+    val onNewMix: (TakeId) -> Unit = {},
+    val onEditMix: (Mix) -> Unit = {},
+    val onDeleteMix: (MixId) -> Unit = {},
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -382,7 +418,7 @@ private fun LyricsPane(content: SessionContent, actions: SessionActions, modifie
 
 /** One segment of a switch (Karaoke | Page, the Backing Audio): 6 dp corners, the chosen one in muted gold, no check mark. */
 @Composable
-private fun SingleChoiceSegmentedButtonRowScope.Choice(
+internal fun SingleChoiceSegmentedButtonRowScope.Choice(
     label: String,
     selected: Boolean,
     index: Int,
@@ -440,6 +476,7 @@ private fun SessionControls(openError: String?, content: SessionContent, actions
             Microphone(content.input, content.inputGainDb, actions.onGain)
             SettingRow("Countdown before recording (${Session.COUNTDOWN_SECONDS} s)", content.countdownEnabled, actions.onCountdown)
             Takes(content.takes, content.state, actions)
+            MixesSection(content.mixes, content.takes, actions.onEditMix, actions.onDeleteMix)
         }
     }
     VocalFreeToggle(track.vocalFree, actions.onVocalFree)
@@ -665,6 +702,7 @@ private fun Transport(state: SessionState, playback: Playback, reviewBackingDb: 
             NeutralOutlinedButton("Stop", actions.onStop, Modifier.height(44.dp))
             ReviewBalance(reviewBackingDb, actions.onReviewBalance)
         }
+        is SessionState.PreviewingMix -> PreviewingMixPanel(state, playback, actions.onStop)
     }
 }
 
@@ -707,7 +745,7 @@ private fun TransposeControl(transpose: Transpose, state: SessionState, onChange
 
 /** A square 44 dp − / + button. */
 @Composable
-private fun StepButton(symbol: String, description: String, enabled: Boolean, onClick: () -> Unit) {
+internal fun StepButton(symbol: String, description: String, enabled: Boolean, onClick: () -> Unit) {
     OutlinedButton(
         onClick = onClick,
         enabled = enabled,
@@ -914,6 +952,7 @@ private fun Takes(takes: List<Take>, state: SessionState, actions: SessionAction
                 )
                 Row(Modifier.offset(x = (-8).dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     TakeAction("Play", MaterialTheme.colorScheme.primary, enabled = state == SessionState.Idle) { actions.onPlayTake(take.id) }
+                    TakeAction("New Mix", MaterialTheme.colorScheme.onSurface) { actions.onNewMix(take.id) }
                     TakeAction("Rename", MaterialTheme.colorScheme.onSurface) { renaming = take }
                     TakeAction("Delete", MaterialTheme.colorScheme.onSurface) { deleting = take }
                 }
@@ -939,7 +978,7 @@ private fun Takes(takes: List<Take>, state: SessionState, actions: SessionAction
         AlertDialog(
             onDismissRequest = { deleting = null },
             title = { Text("Delete ${take.name}?") },
-            text = { Text("The recording is removed for good.") },
+            text = { Text("The recording and its Mixes are removed for good. Exported files stay.") },
             confirmButton = {
                 TextButton(onClick = {
                     actions.onDelete(take.id)
@@ -952,7 +991,7 @@ private fun Takes(takes: List<Take>, state: SessionState, actions: SessionAction
 }
 
 @Composable
-private fun TakeAction(label: String, color: Color, enabled: Boolean = true, onClick: () -> Unit) {
+internal fun TakeAction(label: String, color: Color, enabled: Boolean = true, onClick: () -> Unit) {
     TextButton(
         onClick = onClick,
         enabled = enabled,
@@ -965,7 +1004,7 @@ private fun TakeAction(label: String, color: Color, enabled: Boolean = true, onC
 
 /** A card on the raised surface: Review, Microphone, each Take. No shadow; layers come from the surface tones. */
 @Composable
-private fun Panel(spacing: Dp, verticalPadding: Dp = 14.dp, content: @Composable ColumnScope.() -> Unit) {
+internal fun Panel(spacing: Dp, verticalPadding: Dp = 14.dp, content: @Composable ColumnScope.() -> Unit) {
     Column(
         Modifier
             .fillMaxWidth()
@@ -978,7 +1017,7 @@ private fun Panel(spacing: Dp, verticalPadding: Dp = 14.dp, content: @Composable
 
 /** An outlined button in ink, not gold: gold is kept for the one primary action. */
 @Composable
-private fun NeutralOutlinedButton(
+internal fun NeutralOutlinedButton(
     label: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -1006,7 +1045,7 @@ private fun transportLabel(): TextStyle = MaterialTheme.typography.labelLarge.co
 
 /** Row titles: Transpose, the countdown setting, a Take's name. */
 @Composable
-private fun rowLabel(): TextStyle = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold, lineHeight = 22.sp)
+internal fun rowLabel(): TextStyle = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold, lineHeight = 22.sp)
 
 private val TRANSPORT_HEIGHT = 52.dp
 private const val METER_SEGMENTS = 20
@@ -1018,10 +1057,10 @@ private fun meterLevel(peak: Float): Float =
 
 private const val METER_FLOOR_DB = -60f
 
-private fun formatDb(db: Float): String = if (db > 0) "+${db.roundToInt()} dB" else "${db.roundToInt()} dB"
+internal fun formatDb(db: Float): String = if (db > 0) "+${db.roundToInt()} dB" else "${db.roundToInt()} dB"
 
 /** Semitones with a sign, e.g. "+2", "−3", "0". */
-private fun Transpose.label(): String = when {
+internal fun Transpose.label(): String = when {
     semitones > 0 -> "+$semitones"
     semitones < 0 -> "−${-semitones}"
     else -> "0"

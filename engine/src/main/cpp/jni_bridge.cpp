@@ -81,6 +81,10 @@ JNI_FN(void, setInputGain)(JNIEnv *, jobject, jlong h, jfloat linear) { engine(h
 
 JNI_FN(void, setReviewBackingGain)(JNIEnv *, jobject, jlong h, jfloat linear) { engine(h).setReviewBackingGain(linear); }
 
+JNI_FN(void, setTakeGain)(JNIEnv *, jobject, jlong h, jfloat linear) { engine(h).setTakeGain(linear); }
+
+JNI_FN(void, setTakeAlignment)(JNIEnv *, jobject, jlong h, jlong alignmentFrames) { engine(h).setTakeAlignment(alignmentFrames); }
+
 JNI_FN(jfloat, inputPeak)(JNIEnv *, jobject, jlong h) { return engine(h).inputPeak(); }
 
 JNI_FN(jlong, clipCount)(JNIEnv *, jobject, jlong h) { return engine(h).clipCount(); }

@@ -3,6 +3,7 @@ package app.croonvox.core
 
 import app.croonvox.core.library.ImportLocalFile
 import app.croonvox.core.library.Library
+import app.croonvox.core.mix.Mixes
 import app.croonvox.core.model.PipelineStep
 import app.croonvox.core.model.SeparationModelId
 import app.croonvox.core.model.SourceId
@@ -11,16 +12,17 @@ import app.croonvox.core.model.TrackId
 import app.croonvox.core.model.TrackPipelineState
 import app.croonvox.core.pipeline.DefaultSeparationModel
 import app.croonvox.core.pipeline.TrackPipeline
+import app.croonvox.core.port.SeparationProgress
 import app.croonvox.core.session.BackingAudio
 import app.croonvox.core.session.Sessions
 import app.croonvox.core.session.backingAudio
 import app.croonvox.core.testing.FakeAudioEngine
-import app.croonvox.core.testing.InMemorySettingsRepository
-import app.croonvox.core.testing.InMemoryTakeRepository
-import app.croonvox.core.port.SeparationProgress
 import app.croonvox.core.testing.FakeLocalFile
 import app.croonvox.core.testing.FakePipelineJobs
 import app.croonvox.core.testing.FakeSource
+import app.croonvox.core.testing.InMemoryMixRepository
+import app.croonvox.core.testing.InMemorySettingsRepository
+import app.croonvox.core.testing.InMemoryTakeRepository
 import app.croonvox.core.testing.InMemoryTrackFiles
 import app.croonvox.core.testing.InMemoryTrackRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -144,7 +146,7 @@ class TrackPipelineTest {
         startPipeline()
         assertEquals(emptyList(), jobs.separations)
         val engine = FakeAudioEngine()
-        val sessions = Sessions(tracks, InMemoryTakeRepository(), files, engine, InMemorySettingsRepository())
+        val sessions = Sessions(tracks, InMemoryTakeRepository(), files, engine, InMemorySettingsRepository(), Mixes(tracks, InMemoryTakeRepository(), InMemoryMixRepository(), files, InMemorySettingsRepository()))
 
         val session = sessions.open(track.id, backgroundScope)
 

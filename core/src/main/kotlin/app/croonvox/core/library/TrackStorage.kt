@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package app.croonvox.core.library
 
+import app.croonvox.core.mix.MixRepository
 import app.croonvox.core.model.SeparationModelId
 import app.croonvox.core.model.Take
 import app.croonvox.core.model.Track
@@ -17,6 +18,7 @@ import kotlinx.coroutines.flow.first
 class TrackStorage(
     private val tracks: TrackRepository,
     private val takes: TakeRepository,
+    private val mixes: MixRepository,
     private val files: TrackFiles,
     private val jobs: PipelineJobs,
     private val models: List<SeparationModelId>,
@@ -40,21 +42,23 @@ class TrackStorage(
         files.deleteStems(id, model)
     }
 
-    /** Deletes a kept Take and its audio. */
+    /** Deletes a kept Take, its Mixes and its audio. */
     suspend fun deleteTake(take: Take) {
-        // Row first, then the file: the list never shows a Take whose audio is gone.
+        // Rows first, then the file: the list never shows a Take whose audio is gone.
+        mixes.deleteForTake(take.id)
         takes.delete(take.id)
         files.deleteTake(take.track, take.id)
     }
 
     /**
-     * Deletes the Track and everything it owns: its jobs stop, then its Takes, Lyrics and files go.
+     * Deletes the Track and everything it owns: its jobs stop, then its Mixes, Takes, Lyrics and files go.
      * The UI asks for confirmation first.
      */
     suspend fun deleteTrack(id: TrackId) {
         // Jobs first, so they stop writing; rows before files, so nothing lists a Track whose
         // audio is gone. A job that still writes a moment later is cleared by removeOrphanedFiles().
         jobs.cancelAll(id)
+        mixes.deleteAll(id)
         takes.deleteAll(id)
         tracks.delete(id)
         files.deleteAll(id)

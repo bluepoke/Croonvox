@@ -1,0 +1,83 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+//
+// Offline Render of a Mix (#14, spec #1): Backing Audio plus a Take into PCM, through the same
+// BackingRenderer and mixTake() as Take playback in Review and the Mix Preview. The output is
+// timeline frames [from, to) as interleaved stereo float.
+//
+// Streaming: the Take is held whole (mono), but the Backing Audio is fed in order from frame 0 and
+// only a short window of it is kept, so a Session holding the same song in memory isn't doubled.
+//
+// No platform dependencies, so it can be built and checked on a host as well. Not thread-safe.
+#pragma once
+
+#include <cstdint>
+#include <vector>
+
+#include "BackingRenderer.h"
+
+namespace croonvox {
+
+class OfflineMixRender {
+public:
+    // Take sample j sounds at timeline frame takeStart + j − alignment; gains are linear.
+    OfflineMixRender(int32_t sampleRate, int64_t from, int64_t to, int64_t takeStart, int64_t alignment, int transpose,
+                     float backingGain, float takeGain);
+
+    // Appends Take audio (the first channel of each frame).
+    void appendTake(const float *interleaved, int32_t frames, int32_t channels);
+
+    // Appends Backing Audio (1..n channels; mono to both, beyond two the first two), in order from
+    // timeline frame 0, and renders as far as it allows.
+    void appendBacking(const float *interleaved, int32_t frames, int32_t channels);
+
+    // No more Backing Audio comes: what follows its end is silence. Renders the rest.
+    void endBacking();
+
+    // Moves up to [maxFrames] rendered frames into [out]; returns how many.
+    int32_t drain(float *out, int32_t maxFrames);
+
+    // Every frame up to [to] is rendered (it may still need draining).
+    bool rendered() const { return mPos >= mTo; }
+
+    // More Backing Audio must be fed to render the rest.
+    bool needsBacking() const { return !rendered() && !mBackingEnded; }
+
+private:
+    static constexpr int32_t kRenderFrames = 1024;
+
+    // The window of Backing Audio kept: interleaved stereo frames from mWindowStart.
+    class Window : public StereoFrames {
+    public:
+        const float *at(int64_t frame, int64_t &contiguous) const override {
+            contiguous = end() - frame;
+            return frames.data() + static_cast<size_t>(frame - start) * 2;
+        }
+        int64_t end() const { return start + static_cast<int64_t>(frames.size() / 2); }
+        void dropBefore(int64_t frame);
+
+        int64_t start = 0;
+        std::vector<float> frames;
+    };
+
+    void renderAvailable();
+
+    BackingRenderer mBacking;
+    Window mWindow;
+    int64_t mFed = 0;  // Backing Audio frames received, from timeline frame 0
+    bool mBackingEnded = false;
+    bool mStarted = false;
+
+    const int64_t mTo;
+    const int64_t mTakeStart;
+    const int64_t mAlignment;
+    const int mTranspose;
+    const float mBackingGain;
+    const float mTakeGain;
+    int64_t mPos;
+
+    std::vector<float> mTake;
+    std::vector<float> mOutput;  // interleaved stereo, rendered and not yet drained
+    size_t mOutputRead = 0;      // samples of mOutput already drained
+};
+
+}  // namespace croonvox

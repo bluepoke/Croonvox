@@ -4,6 +4,8 @@ package app.croonvox.core.pipeline
 import app.croonvox.core.library.TrackFiles
 import app.croonvox.core.library.TrackRepository
 import app.croonvox.core.library.sizeOfStems
+import app.croonvox.core.mix.MixRepository
+import app.croonvox.core.mix.switchToOriginalAudio
 import app.croonvox.core.model.PipelineStep
 import app.croonvox.core.model.SeparationModelId
 import app.croonvox.core.model.TrackId
@@ -18,6 +20,7 @@ class VocalFreeToggle(
     private val tracks: TrackRepository,
     private val files: TrackFiles,
     private val jobs: PipelineJobs,
+    private val mixes: MixRepository,
     private val models: List<SeparationModelId>,
 ) {
     /** Bytes that marking the Track would free: its stems. The UI asks for confirmation when this isn't 0. */
@@ -30,7 +33,8 @@ class VocalFreeToggle(
      * Marks the Track Vocal-Free. Separation is cancelled or undone: a Track that is Separating,
      * whose Separation failed, or that has (or had) stems becomes Ready without stems, and what
      * Separation left is deleted. A Track still to be downloaded skips Separation once it is
-     * (see [TrackPipeline]).
+     * (see [TrackPipeline]). Mixes on the Instrumental switch to the Original Audio, which keeps them
+     * aligned because stems are sample-aligned with it (ADR 14).
      */
     suspend fun mark(id: TrackId) {
         var before: TrackPipelineState? = null
@@ -43,6 +47,8 @@ class VocalFreeToggle(
                 else -> track.copy(vocalFree = true)
             }
         } ?: return
+        // Before the stems go, so no Mix points at a deleted Instrumental.
+        mixes.switchToOriginalAudio(id)
         // State first, then jobs and files: a late Separation can no longer write over it (SeparateTrack).
         if (before is TrackPipelineState.Separating) jobs.cancelSeparation(id)
         // Unmarked again while waiting for the job to stop: the new Separation's files stay.
@@ -53,7 +59,8 @@ class VocalFreeToggle(
     /**
      * Unmarks the Track, to be separated with [model] (the model picker opens with the Default
      * Separation Model, ADR 19): a Ready one goes back through Separating with it (ADR 14), one
-     * still to be downloaded is separated with it once it is.
+     * still to be downloaded is separated with it once it is. Mixes keep the Original Audio until
+     * the user switches them (ADR 14).
      */
     suspend fun unmark(id: TrackId, model: SeparationModelId) {
         val track = tracks.update(id) { track ->

@@ -53,6 +53,18 @@ class FakeAudioEngine(private val durationsMs: Map<AudioFile, Long> = emptyMap()
         reviewBackingGainDb = gainDb
     }
 
+    /** The last value passed to [setTakeGain]. */
+    var takeGainDb: Float = 0f
+        private set
+
+    override fun setTakeGain(gainDb: Float) {
+        takeGainDb = gainDb
+    }
+
+    override fun setTakeAlignment(alignmentFrames: Long) {
+        if (state.value.playingTake) lastAlignmentFrames = alignmentFrames
+    }
+
     /** Take audio written by [writeTake], by file. */
     val writtenTakes = mutableMapOf<AudioFile, CapturedTake>()
 

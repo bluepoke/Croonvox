@@ -14,6 +14,9 @@ import app.croonvox.core.lyrics.LyricsOffset
 import app.croonvox.core.lyrics.LyricsPipeline
 import app.croonvox.core.lyrics.LyricsRepository
 import app.croonvox.core.lyrics.MatchLyrics
+import app.croonvox.core.mix.ExportMix
+import app.croonvox.core.mix.MixRepository
+import app.croonvox.core.mix.Mixes
 import app.croonvox.core.pipeline.DefaultSeparationModel
 import app.croonvox.core.pipeline.DownloadTrack
 import app.croonvox.core.pipeline.SeparateTrack
@@ -29,11 +32,14 @@ import app.croonvox.core.session.TakeRepository
 import app.croonvox.data.AppTrackFiles
 import app.croonvox.data.CroonvoxDatabase
 import app.croonvox.data.RoomLyricsRepository
+import app.croonvox.data.RoomMixRepository
 import app.croonvox.data.RoomSettingsRepository
 import app.croonvox.data.RoomTakeRepository
 import app.croonvox.data.RoomTrackRepository
+import app.croonvox.data.export.MediaStoreExports
 import app.croonvox.downloading.HttpMediaDownloader
 import app.croonvox.engine.OboeAudioEngine
+import app.croonvox.engine.OfflineMixRenderer
 import app.croonvox.importing.Importer
 import app.croonvox.importing.LinkImporter
 import app.croonvox.importing.PendingImport
@@ -45,11 +51,11 @@ import app.croonvox.separating.WorkManagerPipelineJobs
 import app.croonvox.separation.ModelSeparator
 import app.croonvox.separation.ModelStore
 import app.croonvox.separation.SeparationCatalogue
-import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
+import java.io.File
 
 /**
  * Manual dependency injection: the one place that wires adapters to the domain core.
@@ -66,14 +72,21 @@ class AppContainer(private val context: Context) {
     val audioEngine: AudioEngine by lazy { OboeAudioEngine(context) }
     val takeRepository: TakeRepository by lazy { RoomTakeRepository(database) }
     val settingsRepository: SettingsRepository by lazy { RoomSettingsRepository(database) }
+    val mixRepository: MixRepository by lazy { RoomMixRepository(database) }
 
     val library: Library by lazy { Library(trackRepository, takeRepository) }
     val trackStorage: TrackStorage by lazy {
-        TrackStorage(trackRepository, takeRepository, trackFiles, pipelineJobs, SeparationCatalogue.models.map { it.id })
+        TrackStorage(trackRepository, takeRepository, mixRepository, trackFiles, pipelineJobs, SeparationCatalogue.models.map { it.id })
     }
     val importLocalFile: ImportLocalFile by lazy { ImportLocalFile(trackRepository, trackFiles) }
     val sessions: Sessions by lazy {
-        Sessions(trackRepository, takeRepository, trackFiles, audioEngine, settingsRepository)
+        Sessions(trackRepository, takeRepository, trackFiles, audioEngine, settingsRepository, mixes)
+    }
+
+    // Mixes and their Export (#14, ADR 7, ADR 8).
+    val mixes: Mixes by lazy { Mixes(trackRepository, takeRepository, mixRepository, trackFiles, settingsRepository) }
+    val exportMix: ExportMix by lazy {
+        ExportMix(trackRepository, takeRepository, mixRepository, trackFiles, OfflineMixRenderer(), MediaStoreExports(context.contentResolver))
     }
     val importer: Importer by lazy { Importer(appScope, importLocalFile, trackFiles, context.contentResolver) }
 
@@ -87,7 +100,7 @@ class AppContainer(private val context: Context) {
     val separateTrack: SeparateTrack by lazy { SeparateTrack(trackRepository, trackFiles, separator) }
     private val pipelineJobs by lazy { WorkManagerPipelineJobs(workManager) }
     val vocalFreeToggle: VocalFreeToggle by lazy {
-        VocalFreeToggle(trackRepository, trackFiles, pipelineJobs, SeparationCatalogue.models.map { it.id })
+        VocalFreeToggle(trackRepository, trackFiles, pipelineJobs, mixRepository, SeparationCatalogue.models.map { it.id })
     }
     /** Stops Separation jobs of earlier versions before the Track Pipeline queues them again (#28). */
     suspend fun stopLegacySeparations() = pipelineJobs.stopLegacySeparations()

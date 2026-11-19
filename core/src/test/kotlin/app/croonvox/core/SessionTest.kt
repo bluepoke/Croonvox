@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package app.croonvox.core
 
+import app.croonvox.core.mix.Mixes
 import app.croonvox.core.model.BackingChoice
 import app.croonvox.core.model.InputDevice
 import app.croonvox.core.model.OutputRoute
@@ -10,17 +11,18 @@ import app.croonvox.core.model.Track
 import app.croonvox.core.model.TrackId
 import app.croonvox.core.model.TrackPipelineState
 import app.croonvox.core.model.Transpose
-import app.croonvox.core.session.NotPlayableYet
 import app.croonvox.core.session.BackingAudio
+import app.croonvox.core.session.MicrophoneUnavailable
+import app.croonvox.core.session.NotPlayableYet
 import app.croonvox.core.session.Session
 import app.croonvox.core.session.SessionState
 import app.croonvox.core.session.Sessions
 import app.croonvox.core.testing.FakeAudioEngine
+import app.croonvox.core.testing.InMemoryMixRepository
 import app.croonvox.core.testing.InMemorySettingsRepository
 import app.croonvox.core.testing.InMemoryTakeRepository
 import app.croonvox.core.testing.InMemoryTrackFiles
 import app.croonvox.core.testing.InMemoryTrackRepository
-import app.croonvox.core.session.MicrophoneUnavailable
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
@@ -43,7 +45,7 @@ class SessionTest {
     private val settings = InMemorySettingsRepository()
     private val instrumental = files.stems(trackId, MODEL).instrumental
     private val engine = FakeAudioEngine(mapOf(files.originalAudio(trackId) to SONG_MS, instrumental to SONG_MS))
-    private val sessions = Sessions(tracks, takes, files, engine, settings, clock = { NOW })
+    private val sessions = Sessions(tracks, takes, files, engine, settings, Mixes(tracks, takes, InMemoryMixRepository(), files, settings), clock = { NOW })
 
     private suspend fun addTrack(pipeline: TrackPipelineState) =
         tracks.addIfAbsent(Track(trackId, "Fly Me to the Moon", "Frank Sinatra", SONG_MS, pipeline))
@@ -138,7 +140,7 @@ class SessionTest {
     }
 
     @Test
-    fun `the Review balance can be changed and is remembered`() = runTest {
+    fun `the Review Balance can be changed and is remembered`() = runTest {
         val first = openDownloaded()
         first.setReviewBackingDb(-27f)
         assertEquals(-27f, engine.reviewBackingGainDb)

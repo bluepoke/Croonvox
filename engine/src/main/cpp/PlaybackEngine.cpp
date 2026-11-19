@@ -22,15 +22,6 @@ constexpr float kClipLevel = 0.999f;
 constexpr int64_t kTakeHeadroomSeconds = 5;          // recording may outlast an estimated duration
 constexpr int kFlacBitsPerSample = 24;
 constexpr int kFlacChunkFrames = 4096;
-constexpr float kTonalityLimitHz = 8000.0f;  // Transpose: keep tonal treatment below this (as in spike #2)
-constexpr int kMaxTranspose = 6;             // ADR 5: −6…+6 semitones
-
-// Planar stereo for Signalsmith Stretch: channel c starts at data + c * stride.
-struct Planar {
-    float *data;
-    int32_t stride;
-    float *operator[](int c) const { return data + c * stride; }
-};
 }  // namespace
 
 PlaybackEngine::~PlaybackEngine() {
@@ -118,14 +109,8 @@ void PlaybackEngine::discardLoad() {
 
 // Only while no callback can run (the stream is closed).
 void PlaybackEngine::configureStretchLocked(int32_t sampleRate) {
-    mAppliedTranspose = 0;
-    if (sampleRate <= 0 || sampleRate == mStretchRate) return;
-    mStretch.presetCheaper(2, static_cast<float>(sampleRate), true);
-    mStretchLead = mStretch.outputSeekLength(1.0f);
-    mStretchIn.assign(static_cast<size_t>(std::max(mStretchLead, kStretchChunk)) * 2, 0.0f);
-    mStretchOut.assign(static_cast<size_t>(kStretchChunk) * 2, 0.0f);
-    mStretchRate = sampleRate;
-    LOGI("Transpose: stretcher at %d Hz, read-ahead %d frames", sampleRate, mStretchLead);
+    const int32_t lead = mBacking.configure(sampleRate);
+    LOGI("Transpose: stretcher at %d Hz, read-ahead %d frames", sampleRate, lead);
 }
 
 int64_t PlaybackEngine::durationFrames() const {
@@ -366,6 +351,8 @@ void PlaybackEngine::setInputGain(float linear) { mInputGain.store(std::clamp(li
 
 void PlaybackEngine::setReviewBackingGain(float linear) { mReviewBackingGain.store(std::clamp(linear, 0.0f, 1.0f)); }
 
+void PlaybackEngine::setTakeGain(float linear) { mTakeGain.store(std::clamp(linear, 0.0f, 16.0f)); }
+
 int64_t PlaybackEngine::reportedLatencyFramesLocked() {
     const int32_t rate = mSampleRate.load();
     if (!mStream || !mInput || rate <= 0) return 0;
@@ -550,117 +537,6 @@ void PlaybackEngine::trackXRuns() {
     mBacklogFloor = std::min(mBacklogFloor, backlog);
 }
 
-void PlaybackEngine::mixBacking(int64_t pos, int64_t decoded, float *out, int32_t numFrames, int32_t &written) {
-    // Copy what is decoded; past that, output silence and wait (still decoding).
-    while (written < numFrames && pos < decoded) {
-        const int64_t inBlock = pos % kBlockFrames;
-        const auto n = static_cast<int32_t>(std::min<int64_t>({numFrames - written, decoded - pos, kBlockFrames - inBlock}));
-        const float *src = mBlocks[static_cast<size_t>(pos / kBlockFrames)] + inBlock * 2;
-        std::copy_n(src, static_cast<size_t>(n) * 2, out + static_cast<size_t>(written) * 2);
-        written += n;
-        pos += n;
-    }
-}
-
-void PlaybackEngine::readPlanar(int64_t from, int64_t decoded, int32_t frames, float *left, float *right) const {
-    int32_t i = 0;
-    while (i < frames) {
-        const int64_t f = from + i;
-        if (f >= decoded) {  // past the decoded audio (or the end): silence
-            std::fill(left + i, left + frames, 0.0f);
-            std::fill(right + i, right + frames, 0.0f);
-            return;
-        }
-        const int64_t inBlock = f % kBlockFrames;
-        const auto n = static_cast<int32_t>(std::min<int64_t>({frames - i, decoded - f, kBlockFrames - inBlock}));
-        const float *src = mBlocks[static_cast<size_t>(f / kBlockFrames)] + inBlock * 2;
-        for (int32_t k = 0; k < n; ++k) {
-            left[i + k] = src[2 * k];
-            right[i + k] = src[2 * k + 1];
-        }
-        i += n;
-    }
-}
-
-void PlaybackEngine::setStretchTranspose(int semitones) {
-    mStretch.setTransposeSemitones(static_cast<float>(semitones), kTonalityLimitHz / static_cast<float>(mStretchRate));
-}
-
-// Restarts the stretcher at [pos]: the next process() output is timeline frame pos, pitch-shifted.
-void PlaybackEngine::primeStretch(int64_t pos, int64_t decoded, int transpose) {
-    setStretchTranspose(transpose);
-    const auto stride = static_cast<int32_t>(mStretchIn.size() / 2);
-    readPlanar(pos, decoded, mStretchLead, mStretchIn.data(), mStretchIn.data() + stride);
-    mStretch.outputSeek(Planar{mStretchIn.data(), stride}, mStretchLead);
-}
-
-// Stretched Backing Audio for timeline frames pos…pos+numFrames, mixed over [out]: replacing it,
-// or crossfading from what [out] holds (fadeIn) or to it (fadeOut) across the callback.
-void PlaybackEngine::mixStretched(int64_t pos, int64_t decoded, float *out, int32_t numFrames, bool fadeIn, bool fadeOut) {
-    const auto inStride = static_cast<int32_t>(mStretchIn.size() / 2);
-    float *outL = mStretchOut.data();
-    float *outR = mStretchOut.data() + kStretchChunk;
-    for (int32_t done = 0; done < numFrames;) {
-        const int32_t n = std::min(kStretchChunk, numFrames - done);
-        // The stretcher's input runs mStretchLead ahead of the timeline position it outputs.
-        readPlanar(pos + done + mStretchLead, decoded, n, mStretchIn.data(), mStretchIn.data() + inStride);
-        mStretch.process(Planar{mStretchIn.data(), inStride}, n, Planar{mStretchOut.data(), kStretchChunk}, n);
-        for (int32_t k = 0; k < n; ++k) {
-            const int32_t i = done + k;
-            const float ramp = static_cast<float>(i + 1) / static_cast<float>(numFrames);
-            const float w = fadeIn ? ramp : fadeOut ? 1.0f - ramp : 1.0f;
-            out[2 * i] = out[2 * i] * (1.0f - w) + outL[k] * w;
-            out[2 * i + 1] = out[2 * i + 1] * (1.0f - w) + outR[k] * w;
-        }
-        done += n;
-    }
-}
-
-// Writes the Backing Audio for timeline frames from [pos] into [out] (zeroed) at [transpose] and
-// returns how many frames the position advances.
-int32_t PlaybackEngine::renderBacking(int64_t pos, int64_t decoded, bool complete, bool seeked, int transpose,
-                                      float *out, int32_t numFrames) {
-    if (mStretchRate <= 0) transpose = 0;
-    // A jump in the timeline (seek, transport start) cuts over: the stretcher starts afresh there.
-    if (seeked) mStretchCut = true;
-    const bool cut = mStretchCut;
-    const int from = cut ? 0 : mAppliedTranspose;
-    int32_t written = 0;
-    if (from == 0 && transpose == 0) {
-        mAppliedTranspose = 0;
-        mStretchCut = false;
-        mixBacking(pos, decoded, out, numFrames, written);
-        return written;
-    }
-    // Stretching reads ahead of the position; until that is decoded, wait (silence) like plain playback.
-    // Take playback runs on meanwhile, so the stretcher starts afresh once the audio is there.
-    if (!complete && pos + mStretchLead + numFrames > decoded) {
-        mStretchCut = true;
-        return 0;
-    }
-    mStretchCut = false;
-    written = complete ? static_cast<int32_t>(std::clamp<int64_t>(decoded - pos, 0, numFrames)) : numFrames;
-    if (from == 0) {
-        // Leaving the bypass: crossfade in from the direct audio, unless this is a cut.
-        primeStretch(pos, decoded, transpose);
-        int32_t direct = 0;
-        if (!cut) mixBacking(pos, decoded, out, numFrames, direct);
-        mixStretched(pos, decoded, out, numFrames, !cut, false);
-    } else if (transpose == 0) {
-        // Back to the bypass: crossfade out to the direct audio.
-        int32_t direct = 0;
-        mixBacking(pos, decoded, out, numFrames, direct);
-        mixStretched(pos, decoded, out, numFrames, false, true);
-    } else {
-        // From one Transpose to another: the stretcher changes live without a glitch (spike #2).
-        if (transpose != from) setStretchTranspose(transpose);
-        mixStretched(pos, decoded, out, numFrames, false, false);
-    }
-    mAppliedTranspose = transpose;
-    std::fill(out + static_cast<size_t>(written) * 2, out + static_cast<size_t>(numFrames) * 2, 0.0f);  // past the end
-    return written;
-}
-
 oboe::DataCallbackResult PlaybackEngine::onAudioReady(oboe::AudioStream *, void *audioData, int32_t numFrames) {
     auto *out = static_cast<float *>(audioData);
     // Completion first: if it is set, the decoded count read after it is final (see endLoad()).
@@ -682,7 +558,7 @@ oboe::DataCallbackResult PlaybackEngine::onAudioReady(oboe::AudioStream *, void 
     // Plain playback follows the Transpose control live; a Take keeps the one it started with.
     const int transpose = transport == Transport::Playing ? mPlayTranspose.load(std::memory_order_relaxed)
                                                           : mTransportTranspose.load(std::memory_order_relaxed);
-    const int32_t written = renderBacking(start, decoded, complete, seek >= 0, transpose, out, numFrames);
+    const int32_t written = mBacking.render(mBlockFrames, start, decoded, complete, seek >= 0, transpose, out, numFrames);
     int64_t pos = start + written;
     bool finished = complete && pos >= decoded;
 
@@ -714,19 +590,15 @@ oboe::DataCallbackResult PlaybackEngine::onAudioReady(oboe::AudioStream *, void 
     } else if (transport == Transport::PlayingTake) {
         const int64_t takeFrames = mTakeFrames.load(std::memory_order_relaxed);
         const int64_t align = mTakeAlignment.load(std::memory_order_relaxed);
-        // Review balance: the Backing Audio plays quieter, so the voice can be judged.
-        const float backing = mReviewBackingGain.load(std::memory_order_relaxed);
-        for (int32_t i = 0; i < numFrames; ++i) {
-            const int64_t j = start + i - mTakeStart + align;
-            const float v = (j >= 0 && j < takeFrames) ? mTake[static_cast<size_t>(j)] : 0.0f;
-            out[2 * i] = out[2 * i] * backing + v;
-            out[2 * i + 1] = out[2 * i + 1] * backing + v;
-        }
+        // Review Balance: the Backing Audio plays quieter, so the voice can be judged. A Mix Preview
+        // sets its own levels; the Offline Render mixes the same way.
+        mixTake(out, numFrames, start, mTakeStart, align, mTake.data(), takeFrames,
+                mReviewBackingGain.load(std::memory_order_relaxed), mTakeGain.load(std::memory_order_relaxed));
         pos = start + numFrames;  // the Take may run on past the decoded Backing Audio
         if (pos - mTakeStart + align >= takeFrames) finished = true;
     }
 
-    for (int32_t i = 0; i < numFrames * 2; ++i) out[i] = std::clamp(out[i], -1.0f, 1.0f);
+    clipOutput(out, numFrames);
     // A seek that arrived while this callback ran wins over our position.
     if (mSeekRequest.load(std::memory_order_relaxed) < 0) mPosition.store(pos, std::memory_order_relaxed);
     if (finished) {

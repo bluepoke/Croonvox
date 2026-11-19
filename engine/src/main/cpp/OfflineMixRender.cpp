@@ -1,0 +1,84 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+#include "OfflineMixRender.h"
+
+#include <algorithm>
+
+namespace croonvox {
+
+OfflineMixRender::OfflineMixRender(int32_t sampleRate, int64_t from, int64_t to, int64_t takeStart, int64_t alignment,
+                                   int transpose, float backingGain, float takeGain)
+    : mTo(std::max(from, to)),
+      mTakeStart(takeStart),
+      mAlignment(alignment),
+      mTranspose(std::clamp(transpose, -kMaxTranspose, kMaxTranspose)),
+      mBackingGain(backingGain),
+      mTakeGain(takeGain),
+      mPos(std::max<int64_t>(from, 0)) {
+    mBacking.configure(sampleRate);
+    mWindow.start = mPos;
+}
+
+void OfflineMixRender::appendTake(const float *interleaved, int32_t frames, int32_t channels) {
+    const int32_t ch = std::max(1, channels);
+    mTake.reserve(mTake.size() + static_cast<size_t>(std::max(frames, 0)));
+    for (int32_t i = 0; i < frames; ++i) mTake.push_back(interleaved[static_cast<size_t>(i) * ch]);
+}
+
+void OfflineMixRender::Window::dropBefore(int64_t frame) {
+    const int64_t drop = std::clamp<int64_t>(frame - start, 0, end() - start);
+    // Compacted only once the dropped part is large, so feeding stays linear in time.
+    if (drop < 1 << 16 && drop * 2 < end() - start) return;
+    frames.erase(frames.begin(), frames.begin() + static_cast<long>(drop) * 2);
+    start += drop;
+}
+
+void OfflineMixRender::appendBacking(const float *interleaved, int32_t frames, int32_t channels) {
+    const int32_t ch = std::max(1, channels);
+    for (int32_t i = 0; i < frames; ++i, ++mFed) {
+        if (mFed < mWindow.start) continue;  // before the rendered span: never read
+        const float l = interleaved[static_cast<size_t>(i) * ch];
+        mWindow.frames.push_back(l);
+        mWindow.frames.push_back(ch > 1 ? interleaved[static_cast<size_t>(i) * ch + 1] : l);
+    }
+    renderAvailable();
+}
+
+void OfflineMixRender::endBacking() {
+    mBackingEnded = true;
+    renderAvailable();
+}
+
+void OfflineMixRender::renderAvailable() {
+    const int64_t available = mWindow.end();
+    while (mPos < mTo) {
+        const auto n = static_cast<int32_t>(std::min<int64_t>(kRenderFrames, mTo - mPos));
+        // As in real-time playback, the stretcher reads mLead ahead; render only once that is here.
+        const int64_t needed = mPos + n + (mTranspose != 0 ? mBacking.lead() : 0);
+        if (!mBackingEnded && available < needed) break;
+        const size_t at = mOutput.size();
+        mOutput.resize(at + static_cast<size_t>(n) * 2, 0.0f);
+        float *out = mOutput.data() + at;
+        // The first call starts the stretcher at the span's start, like Take playback starting there.
+        mBacking.render(mWindow, mPos, available, mBackingEnded, !mStarted, mTranspose, out, n);
+        mStarted = true;
+        mixTake(out, n, mPos, mTakeStart, mAlignment, mTake.data(), static_cast<int64_t>(mTake.size()), mBackingGain,
+                mTakeGain);
+        clipOutput(out, n);
+        mPos += n;
+        mWindow.dropBefore(mPos);
+    }
+}
+
+int32_t OfflineMixRender::drain(float *out, int32_t maxFrames) {
+    const size_t available = (mOutput.size() - mOutputRead) / 2;
+    const auto n = static_cast<int32_t>(std::min<size_t>(available, static_cast<size_t>(std::max(maxFrames, 0))));
+    std::copy_n(mOutput.data() + mOutputRead, static_cast<size_t>(n) * 2, out);
+    mOutputRead += static_cast<size_t>(n) * 2;
+    if (mOutputRead == mOutput.size()) {
+        mOutput.clear();
+        mOutputRead = 0;
+    }
+    return n;
+}
+
+}  // namespace croonvox
