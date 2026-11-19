@@ -8,6 +8,7 @@ import app.croonvox.core.model.SourceId
 import app.croonvox.core.model.Track
 import app.croonvox.core.model.TrackId
 import app.croonvox.core.model.TrackPipelineState
+import app.croonvox.core.model.Transpose
 import app.croonvox.core.port.SeparationProgress
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -66,5 +67,14 @@ class TrackEntityTest {
             .copy(pipelineState = "ready:fast", pipelineProgress = null, pipelineFailure = null)
 
         assertEquals(TrackPipelineState.Ready(SeparationModelId("fast")), earlier.toTrack().pipeline)
+    }
+
+    @Test
+    fun `the Last Transpose is stored and read back`() {
+        for (semitones in listOf(-6, -1, 0, 3, 6)) {
+            val track = track(TrackPipelineState.Ready(model)).copy(lastTranspose = Transpose(semitones))
+
+            assertEquals(track, track.toEntity(addedAt = 1).toTrack(), "$semitones")
+        }
     }
 }

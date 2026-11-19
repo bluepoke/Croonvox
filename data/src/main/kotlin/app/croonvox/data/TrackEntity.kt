@@ -10,6 +10,7 @@ import app.croonvox.core.model.SourceId
 import app.croonvox.core.model.Track
 import app.croonvox.core.model.TrackId
 import app.croonvox.core.model.TrackPipelineState
+import app.croonvox.core.model.Transpose
 import app.croonvox.core.port.SeparationProgress
 
 /** Row of the `tracks` table. Primary key is the Track identity (ADR 10). */
@@ -34,6 +35,8 @@ internal data class TrackEntity(
     @ColumnInfo(name = "backing_choice", defaultValue = INSTRUMENTAL) val backingChoice: String = INSTRUMENTAL,
     /** The Separation Model picked for the Track (version 11, #17); null for Tracks added before. */
     @ColumnInfo(name = "separation_model") val separationModel: String? = null,
+    /** The Last Transpose in semitones (version 13, #23); 0 for Tracks from before. */
+    @ColumnInfo(name = "last_transpose", defaultValue = "0") val lastTranspose: Int = 0,
 )
 
 internal fun Track.toEntity(addedAt: Long): TrackEntity {
@@ -52,6 +55,7 @@ internal fun Track.toEntity(addedAt: Long): TrackEntity {
         vocalFree = vocalFree,
         backingChoice = backingChoice.toColumn(),
         separationModel = separationModel?.value,
+        lastTranspose = lastTranspose.semitones,
     )
 }
 
@@ -65,6 +69,7 @@ internal fun TrackEntity.toTrack() = Track(
     vocalFree = vocalFree,
     backingChoice = backingChoiceFromColumn(backingChoice),
     separationModel = separationModel?.let(::SeparationModelId),
+    lastTranspose = Transpose.clamped(lastTranspose),
 )
 
 private fun BackingChoice.toColumn(): String = when (this) {

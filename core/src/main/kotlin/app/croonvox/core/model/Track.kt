@@ -28,6 +28,12 @@ data class Track(
      * it. Null for Tracks added before models could be picked; they get the Default Separation Model.
      */
     val separationModel: SeparationModelId? = null,
+    /**
+     * The Transpose the Track's control was last set to in a Session, whether or not a Take was kept
+     * (GLOSSARY: Last Transpose). A new Session for the Track starts at it. It never changes Takes, so
+     * neither their Mixes.
+     */
+    val lastTranspose: Transpose = Transpose.None,
 ) {
     /**
      * The Separation Model whose Instrumental is stored, once the Track is Ready with stems; null

@@ -45,10 +45,11 @@ class SessionTest {
     private val settings = InMemorySettingsRepository()
     private val instrumental = files.stems(trackId, MODEL).instrumental
     private val engine = FakeAudioEngine(mapOf(files.originalAudio(trackId) to SONG_MS, instrumental to SONG_MS))
-    private val sessions = Sessions(tracks, takes, files, engine, settings, Mixes(tracks, takes, InMemoryMixRepository(), files, settings), clock = { NOW })
+    private val mixes = Mixes(tracks, takes, InMemoryMixRepository(), files, settings)
+    private val sessions = Sessions(tracks, takes, files, engine, settings, mixes, clock = { NOW })
 
-    private suspend fun addTrack(pipeline: TrackPipelineState) =
-        tracks.addIfAbsent(Track(trackId, "Fly Me to the Moon", "Frank Sinatra", SONG_MS, pipeline))
+    private suspend fun addTrack(pipeline: TrackPipelineState, lastTranspose: Transpose = Transpose.None) =
+        tracks.addIfAbsent(Track(trackId, "Fly Me to the Moon", "Frank Sinatra", SONG_MS, pipeline, lastTranspose = lastTranspose))
 
     @Test
     fun `a Session on a Downloaded Track sings over its Original Audio`() = runTest {
@@ -456,7 +457,7 @@ class SessionTest {
     }
 
     @Test
-    fun `leaving a Session drops its Transpose, so the next one starts untransposed`() = runTest {
+    fun `leaving a Session drops its Transpose from plain playback, and the next Session opens at the Last Transpose`() = runTest {
         val first = openDownloaded()
         first.setTranspose(Transpose(4))
         first.close()
@@ -465,8 +466,65 @@ class SessionTest {
         val second = sessions.open(trackId, backgroundScope)
         second.play()
 
-        assertEquals(Transpose.None, second.transpose.value)
-        assertEquals(Transpose.None, engine.audibleTranspose)
+        assertEquals(Transpose(4), second.transpose.value)
+        assertEquals(Transpose(4), engine.audibleTranspose)
+    }
+
+    @Test
+    fun `changing the Transpose control sets the Track's Last Transpose, also when no Take is recorded`() = runTest {
+        val session = openDownloaded()
+
+        session.setTranspose(Transpose(3))
+        session.setTranspose(Transpose(-2))
+
+        assertEquals(Transpose(-2), tracks.get(trackId)?.lastTranspose)
+    }
+
+    @Test
+    fun `a Session on a new Track opens at Transpose 0`() = runTest {
+        val session = openDownloaded()
+
+        assertEquals(Transpose.None, session.transpose.value)
+        assertEquals(Transpose.None, tracks.get(trackId)?.lastTranspose)
+    }
+
+    @Test
+    fun `a Session opens at the Last Transpose stored for the Track, as after an app restart`() = runTest {
+        addTrack(TrackPipelineState.Downloaded, lastTranspose = Transpose(-3))
+
+        val session = sessions.open(trackId, backgroundScope)
+
+        assertEquals(Transpose(-3), session.transpose.value)
+        assertEquals(Transpose(-3), engine.playbackTranspose)
+    }
+
+    @Test
+    fun `a Session left already changes neither the engine nor the Last Transpose`() = runTest {
+        val left = openDownloaded()
+        left.setTranspose(Transpose(2))
+        val current = sessions.open(trackId, backgroundScope) // closes the one before
+
+        left.setTranspose(Transpose(5)) // e.g. a tap that was still on its way
+
+        assertEquals(Transpose(2), tracks.get(trackId)?.lastTranspose)
+        assertEquals(Transpose(2), current.transpose.value)
+        assertEquals(Transpose(2), engine.playbackTranspose)
+    }
+
+    @Test
+    fun `the Last Transpose never changes kept Takes or their Mixes`() = runTest {
+        val session = openDownloaded()
+        session.setTranspose(Transpose(2))
+        recordTake(session, fromMs = 0, lengthMs = 5_000)
+        val kept = session.keep()
+        val mix = mixes.observe(trackId).first().single()
+
+        session.setTranspose(Transpose(-4))
+
+        assertEquals(Transpose(2), takes.get(kept.id)?.transpose)
+        assertEquals(mix, mixes.observe(trackId).first().single())
+        assertTrue(session.play(kept.id))
+        assertEquals(Transpose(2), engine.audibleTranspose)
     }
 
     @Test

@@ -16,7 +16,10 @@ Users want to sing in a different key without changing the tempo. The options we
 ## Note: built in #10 (2026-11-17)
 - The Audio Engine uses Signalsmith's `presetCheaper` preset (validated in spike #2) and reads ahead by the stretcher's latency, so its output stays sample-aligned with the Session timeline and Takes need no extra alignment.
 - At Transpose 0 the stretcher is **bypassed**: the Backing Audio plays untouched. Switching to or from 0 crossfades over one audio callback. Export (#14, #24) must bypass at 0 as well, so it matches what was heard.
-- Transpose belongs to the Session: it starts at 0 (the Last Transpose comes with #23), and plain playback outside a Session is never transposed.
+- Transpose belongs to the Session: it starts at 0 (superseded by the Last Transpose, see the #23 note below), and plain playback outside a Session is never transposed.
+
+## Note: Last Transpose (#23, 2026-11-19)
+- A Session starts at the Track's **Last Transpose** (0 for a new Track): whatever the control was last set to in a Session for that Track, whether or not a Take was kept. It is stored with the Track. Plain playback outside a Session is still never transposed. Takes keep their own Transpose, and so do their Mixes, which play at their Take's.
 
 ## Consequences
 - MIT-licensed, so it doesn't affect the open license question (ADR 1).

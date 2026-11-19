@@ -31,7 +31,7 @@ Prerequisites: a Ready Track with a sustained note or a clear melody, wired head
 3. **Bound to the Take.** At −2, record 10 s. While recording, press + twice: the backing stays at −2 and a note says the new setting applies to the next Take. In Review, the Take plays at −2 and Review shows "Transpose −2". Keep it: the list shows "−2". With the control at 0, play the kept Take: the backing plays at −2.
 4. **Alignment when transposed (loopback).** At +4, record a loopback Take over a passage with clear transients. In Review the recorded copy sits on the played audio as closely as at Transpose 0 (#8 item 6): the stretcher adds no offset.
 5. **CPU.** At +6, record a 3-minute Take while using the phone. No audible glitches; the xrun correction from #8 item 7 stays small. Then start and stop playback and recording at +6 ten times, and seek a few times: no click or dropout at the start (the stretcher is primed in the first callback).
-6. **Leaving the Session.** Set +3, press Back, then open the Track again: Transpose is 0 and it plays in the original key.
+6. **Last Transpose (#23).** Set +3 without recording, press Back and open another Track: it opens at its own Transpose (0 if it was never changed). Open the first Track again: Transpose is +3 and it plays at +3. Restart the app and open it: still +3. Its kept Takes still play at their own Transpose.
 
 ## Separation in the Track Pipeline (#7)
 

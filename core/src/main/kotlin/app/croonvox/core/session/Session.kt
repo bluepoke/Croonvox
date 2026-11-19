@@ -138,18 +138,29 @@ class Session private constructor(
 
     // --- Transpose (ADR 5) ---
 
-    private val _transpose = MutableStateFlow(Transpose.None)
+    private val _transpose = MutableStateFlow(track.lastTranspose)
 
-    /** The Transpose control: what free playback plays at and the next Take is recorded at. */
+    /**
+     * The Transpose control: what free playback plays at and the next Take is recorded at. It opens
+     * at the Track's Last Transpose.
+     */
     val transpose: StateFlow<Transpose> = _transpose
 
     /**
-     * Sets the Transpose control; free playback follows at once. A Take being recorded or played
-     * back keeps its own Transpose, and existing Takes never change (ADR 5).
+     * Sets the Transpose control; free playback follows at once. It is kept as the Track's Last
+     * Transpose, whether or not a Take is recorded (#23). A Take being recorded or played back keeps
+     * its own Transpose, and so do their Mixes (ADR 5). Ignored once the Session is closed: the
+     * engine and the Track belong to the next one then.
      */
-    fun setTranspose(transpose: Transpose) {
+    suspend fun setTranspose(transpose: Transpose) {
+        if (closed.get()) return
         _transpose.value = transpose
         engine.setTranspose(transpose)
+        deps.tracks.update(track.id) { now ->
+            // The control as it is now, so a write from an earlier change that lands late can't win.
+            val latest = _transpose.value
+            if (now.lastTranspose == latest) null else now.copy(lastTranspose = latest)
+        }
     }
 
     // --- Microphone ---
