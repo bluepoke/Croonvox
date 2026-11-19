@@ -24,6 +24,7 @@ Ubiquitous language for the project. Decisions are recorded in `docs/adr/`.
 | **Practice Loop** | A–B section looped without recording, for learning a passage. |
 | **Guide Vocal** | The Vocal Stem blended into the headphones (Session) or into a Mix at low level. Never recorded. |
 | **Review** | Post-recording playback of a Take with Keep / Discard / Record again. |
+| **Review Balance** | The level of the Backing Audio under a Take while it plays back (Review and kept Takes), lower than the Take by default so the voice can be judged. Only for listening; a new Mix starts at it. _Avoid_: review volume, playback balance. |
 | **Monitoring** | Optional, dry, real-time software routing of the mic to **wired/USB** headphones during a Session. Never over Bluetooth. Warns when the measured round trip is high. See ADR 4, ADR 13. |
 | **Hardware Monitoring** | Zero-latency monitoring done by the audio interface itself (e.g. a USB mic's headphone jack), outside the app. Preferred over Monitoring when available. |
 | **Audio Engine** | Native (C++/Oboe) component that owns the Session timeline: playback, Transpose, capture, Monitoring. |
@@ -35,10 +36,13 @@ Ubiquitous language for the project. Decisions are recorded in `docs/adr/`.
 | **Tap-to-Sync** | Editor in which the user taps per line during playback to turn plain Lyrics into synced Lyrics. |
 | **Page View** | Lyrics display as static pages/scrolling text; works with plain Lyrics. |
 | **Karaoke View** | Time-synced display: the current line is highlighted and word progress is interpolated within the line. Requires synced Lyrics. |
-| **Mix** | Non-destructive combination of one Backing Audio + one Take + Mix Settings. Rendered only for preview/Export. See ADR 7. |
+| **Mix** | Non-destructive combination of one Backing Audio + one Take + Mix Settings, spanning the Take. Heard in a Mix Preview; rendered only for Export. See ADR 7. |
 | **Mix Settings** | Backing level, vocal level, Vocal Nudge, guide-vocal level, Vocal Effects. |
 | **Vocal Nudge** | Manual ±200 ms alignment of a Take, applied on top of Latency Calibration. |
 | **Vocal Effects** | Mix-time presets for the Take (reverb, compression, high-pass). Never applied to Monitoring. |
+| **Mix Editor** | Where one Mix's Backing Audio and Mix Settings are changed, heard in a Mix Preview and exported. _Avoid_: mixer. |
+| **Mix Preview** | A Mix played in the Session as it will be exported, from its Take's Start Position until the Take ends; changes to its Mix Settings are heard at once. _Avoid_: mix playback. |
+| **Offline Render** | The Audio Engine turning a Mix (or, for a Backing Export, the Backing Audio alone) into audio faster than real time, with the same processing as Review and the Mix Preview, so an Export sounds like them. See ADR 7. _Avoid_: bounce, mixdown. |
 | **Export** | Rendering a Mix, or a Track's Backing Audio alone (Backing Export), to WAV, MP3 or M4A/AAC in `Music/Croonvox/` or via share sheet. See ADR 8. |
 | **Backing Export** | An Export of a Track's Backing Audio (Instrumental or Original Audio) alone at a chosen Transpose, with no Take, e.g. as a backing track for a live performance. _Avoid_: karaoke track, instrumental export. |
 
