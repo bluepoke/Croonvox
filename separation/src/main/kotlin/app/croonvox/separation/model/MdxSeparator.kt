@@ -2,8 +2,8 @@
 package app.croonvox.separation.model
 
 import app.croonvox.separation.SegmentSeparator
-import app.croonvox.separation.StereoFrames
 import app.croonvox.separation.SegmentStems
+import app.croonvox.separation.StereoFrames
 import app.croonvox.separation.dsp.PadMode
 import app.croonvox.separation.dsp.Spectrogram
 import app.croonvox.separation.dsp.Stft

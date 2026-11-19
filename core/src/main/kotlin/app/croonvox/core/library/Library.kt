@@ -3,6 +3,7 @@ package app.croonvox.core.library
 
 import app.croonvox.core.model.SeparationModelId
 import app.croonvox.core.model.Track
+import app.croonvox.core.model.TrackId
 import app.croonvox.core.model.TrackPipelineState
 import app.croonvox.core.port.SourceCandidate
 import app.croonvox.core.session.TakeRepository
@@ -18,6 +19,9 @@ class Library(private val tracks: TrackRepository, private val takes: TakeReposi
         combine(tracks.observeAll(), takes.observeCounts()) { all, counts ->
             all.map { LibraryEntry(it, counts[it.id] ?: 0) }
         }
+
+    /** Whether a Track with [id] is in the Library, e.g. a search result added before. */
+    suspend fun contains(id: TrackId): Boolean = tracks.get(id) != null
 
     /**
      * Adds a Source search result as a new Track in the [TrackPipelineState.Added] state, marked

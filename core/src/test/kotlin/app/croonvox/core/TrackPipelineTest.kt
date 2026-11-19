@@ -12,9 +12,11 @@ import app.croonvox.core.model.TrackId
 import app.croonvox.core.model.TrackPipelineState
 import app.croonvox.core.pipeline.DefaultSeparationModel
 import app.croonvox.core.pipeline.TrackPipeline
+import app.croonvox.core.pipeline.VocalFreeToggle
 import app.croonvox.core.port.SeparationProgress
 import app.croonvox.core.session.BackingAudio
 import app.croonvox.core.session.Sessions
+import app.croonvox.core.session.SettingsRepository
 import app.croonvox.core.session.backingAudio
 import app.croonvox.core.testing.FakeAudioEngine
 import app.croonvox.core.testing.FakeLocalFile
@@ -26,12 +28,15 @@ import app.croonvox.core.testing.InMemoryTakeRepository
 import app.croonvox.core.testing.InMemoryTrackFiles
 import app.croonvox.core.testing.InMemoryTrackRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class TrackPipelineTest {
@@ -44,7 +49,19 @@ class TrackPipelineTest {
     private val medium = SeparationModelId("medium")
     private val best = SeparationModelId("best")
     private val settings = InMemorySettingsRepository()
-    private val defaultModel = DefaultSeparationModel(settings, listOf(fast, medium, best), fallback = fast)
+
+    /** Runs once, while the Track Pipeline looks up the Default Separation Model. */
+    private var duringDefaultLookup: (suspend () -> Unit)? = null
+    private val defaultModel = DefaultSeparationModel(
+        object : SettingsRepository by settings {
+            override suspend fun defaultSeparationModel(): SeparationModelId? {
+                duringDefaultLookup?.also { duringDefaultLookup = null }?.invoke()
+                return settings.defaultSeparationModel()
+            }
+        },
+        listOf(fast, medium, best),
+        fallback = fast,
+    )
     private val pipeline = TrackPipeline(tracks, jobs, defaultModel, downloadFrom = setOf(youtube))
 
     private fun TestScope.startPipeline() {
@@ -290,5 +307,66 @@ class TrackPipelineTest {
         assertEquals(TrackPipelineState.Separating(fast), tracks.get(first.id)?.pipeline)
         assertEquals(false, foundAgain.vocalFree)
         assertEquals(false, tracks.get(found.id)?.vocalFree)
+    }
+
+    @Test
+    fun `a Track unmarked Vocal-Free while it becomes Downloaded is separated with the model picked when unmarking`() = runTest {
+        val track = import(FakeLocalFile(displayName = "karaoke.mp3", content = "audio-1"), vocalFree = true)
+        tracks.updatePipeline(track.id, TrackPipelineState.Added) // its import is still finishing
+        val vocalFree = VocalFreeToggle(tracks, files, jobs, InMemoryMixRepository(), listOf(fast, medium, best))
+        // The user unmarks it, picking Best, after the Track Pipeline saw it Vocal-Free and Downloaded.
+        duringDefaultLookup = { vocalFree.unmark(track.id, best) }
+        startPipeline()
+
+        tracks.updatePipeline(track.id, TrackPipelineState.Downloaded)
+
+        assertEquals(TrackPipelineState.Separating(best), tracks.get(track.id)?.pipeline)
+        assertEquals(listOf(FakePipelineJobs.Separation(track.id, best)), jobs.separations)
+    }
+
+    @Test
+    fun `changing the Default Separation Model leaves existing Tracks as they are`() = runTest {
+        startPipeline()
+        val ready = import(FakeLocalFile(displayName = "one.mp3", content = "audio-1"))
+        tracks.updatePipeline(ready.id, TrackPipelineState.Ready(fast))
+        val separating = import(FakeLocalFile(displayName = "two.mp3", content = "audio-2"))
+        val queued = jobs.separations.toList()
+
+        defaultModel.set(best)
+        // The Library changes again (Separation progress), so the Track Pipeline looks at every Track anew.
+        tracks.updatePipeline(separating.id, TrackPipelineState.Separating(fast, SeparationProgress(SeparationProgress.Stage.Separating, 0.5f)))
+
+        assertEquals(TrackPipelineState.Ready(fast), tracks.get(ready.id)?.pipeline)
+        assertEquals(fast, tracks.get(separating.id)?.vocalRemovalModel)
+        assertEquals(queued, jobs.separations)
+    }
+
+    @Test
+    fun `re-separating a Track leaves its Takes unchanged, and they play over the new Instrumental`() = runTest {
+        startPipeline()
+        val track = import(FakeLocalFile(displayName = "song.mp3", content = "audio-1"))
+        tracks.updatePipeline(track.id, TrackPipelineState.Ready(fast))
+        val takes = InMemoryTakeRepository()
+        val engine = FakeAudioEngine(
+            listOf(files.originalAudio(track.id), files.stems(track.id, fast).instrumental, files.stems(track.id, best).instrumental)
+                .associateWith { 180_000L },
+        )
+        val settings = InMemorySettingsRepository()
+        val sessions = Sessions(tracks, takes, files, engine, settings, Mixes(tracks, takes, InMemoryMixRepository(), files, settings))
+        val session = sessions.open(track.id, backgroundScope)
+        session.seekTo(30_000)
+        session.record()
+        engine.advance(10_000)
+        session.stop()
+        val take = session.keep()
+
+        pipeline.reseparate(track.id, best)
+        tracks.updatePipeline(track.id, TrackPipelineState.Ready(best)) // the job finished
+        runCurrent()
+
+        assertEquals(listOf(take), takes.observe(track.id).first())
+        assertEquals(BackingAudio.Instrumental(best), session.backing.value)
+        assertTrue(session.play(take.id))
+        assertEquals(30_000, engine.playback.value.positionMs)
     }
 }

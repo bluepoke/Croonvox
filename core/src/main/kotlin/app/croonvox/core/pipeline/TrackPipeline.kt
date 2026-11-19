@@ -37,10 +37,13 @@ class TrackPipeline(
                     // Left Downloading by an earlier process (or queued above): make sure its job exists.
                     is TrackPipelineState.Downloading -> if (queued.add(track.id)) jobs.download(track.id)
                     TrackPipelineState.Downloaded -> {
-                        val model = track.separationModel ?: defaultModel.get()
-                        // One atomic step, so marking the Track Vocal-Free meanwhile is never missed.
+                        val default = defaultModel.get()
+                        var model = default
+                        // One atomic step, so marking or unmarking the Track Vocal-Free meanwhile is
+                        // never missed: unmarking picks the model, so it is read from the Track as it is now.
                         val next = tracks.update(track.id) { now ->
                             if (now.pipeline != TrackPipelineState.Downloaded) return@update null
+                            model = now.separationModel ?: default
                             // A Vocal-Free Track skips Separation (ADR 14).
                             now.copy(pipeline = if (now.vocalFree) TrackPipelineState.Ready(model = null) else TrackPipelineState.Separating(model))
                         }

@@ -153,11 +153,12 @@ class MainActivity : ComponentActivity() {
         val dismiss = { container.pendingImport.value = null }
         when (val import = pending) {
             null -> Unit
-            is PendingImport.File -> ImportSheet(import.name, null, null, container.modelChoices, onDismiss = dismiss, onAdd = { vocalFree, model ->
+            is PendingImport.File -> ImportSheet(import, import.name, null, null, container.modelChoices, onDismiss = dismiss, onAdd = { vocalFree, model ->
                 dismiss()
                 container.importer.import(import.uri, vocalFree, model)
             })
             is PendingImport.Link -> ImportSheet(
+                import,
                 import.candidate.title,
                 import.candidate.artist,
                 import.candidate.durationMs,

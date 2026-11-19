@@ -36,6 +36,21 @@ data class Track(
     val instrumentalModel: SeparationModelId?
         get() = (pipeline as? TrackPipelineState.Ready)?.model
 
+    /**
+     * The Separation Model the Track's vocal removal uses: the one it is Ready with, the one it is
+     * Separating with (also when re-separating, while an earlier model's stems may still be stored), or
+     * the one whose deleted stems are made again when it is opened (ADR 17, ADR 19). Null before
+     * Separation starts, after it failed, and always for a Vocal-Free Track.
+     */
+    val vocalRemovalModel: SeparationModelId?
+        get() = when (pipeline) {
+            is TrackPipelineState.Ready -> pipeline.model
+            is TrackPipelineState.Separating -> pipeline.model
+            is TrackPipelineState.StemsDeleted -> pipeline.model
+            TrackPipelineState.Added, is TrackPipelineState.Downloading, TrackPipelineState.Downloaded,
+            is TrackPipelineState.Failed -> null
+        }
+
     /** The Original Audio is stored, so the Track can be played and sung (ADR 10). */
     val hasOriginalAudio: Boolean
         get() = when (pipeline) {

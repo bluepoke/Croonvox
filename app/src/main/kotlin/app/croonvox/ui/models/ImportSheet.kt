@@ -32,6 +32,8 @@ import app.croonvox.ui.theme.CroonvoxButtonShape
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ImportSheet(
+    /** The pending import; each new one starts with the defaults. */
+    key: Any,
     title: String,
     details: String?,
     durationMs: Long?,
@@ -39,7 +41,7 @@ fun ImportSheet(
     onAdd: (vocalFree: Boolean, model: SeparationModelId?) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val choice = rememberImportChoice(choices)
+    val choice = rememberImportChoice(choices, key)
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(
             Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),

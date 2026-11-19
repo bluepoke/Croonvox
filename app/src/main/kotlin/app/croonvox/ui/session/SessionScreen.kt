@@ -273,11 +273,8 @@ fun SessionRoute(
  */
 @Composable
 private fun ModelPickDialog(pick: ModelPick, track: Track?, onPick: (SeparationModelId) -> Unit, onConfirm: (Boolean) -> Unit) {
-    val current = when (val state = track?.pipeline) {
-        is TrackPipelineState.Ready -> state.model
-        is TrackPipelineState.Separating -> state.model
-        else -> null
-    }
+    // Deleted stems are no Instrumental: re-separating with their model makes them again (ADR 17).
+    val current = track?.vocalRemovalModel?.takeIf { track.pipeline !is TrackPipelineState.StemsDeleted }
     val selected = pick.options.firstOrNull { it.id == pick.selected }
     val reseparate = pick.purpose == ModelPick.Purpose.Reseparate
     AlertDialog(
@@ -552,12 +549,7 @@ private fun PipelineStatus(pipeline: TrackPipelineState, onRetry: () -> Unit) {
 @Composable
 private fun VocalRemoval(track: Track, modelName: (SeparationModelId) -> String, onReseparate: () -> Unit) {
     if (track.vocalFree || !track.hasOriginalAudio) return
-    val model = when (val state = track.pipeline) {
-        is TrackPipelineState.Ready -> state.model
-        is TrackPipelineState.Separating -> state.model
-        is TrackPipelineState.StemsDeleted -> state.model
-        else -> null
-    }
+    val model = track.vocalRemovalModel
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text("Vocal removal", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)

@@ -105,8 +105,6 @@ object SeparationCatalogue {
     /** Fastest first, as the model picker lists them. */
     val models: List<SeparationModel> = listOf(spleeter2Stems, uvrKaraoke, uvrInstHq4)
 
-    fun byId(id: SeparationModelId): SeparationModel? = models.firstOrNull { it.id == id }
-
     private fun uvrDownload(file: String, sha256: String, bytes: Long) = ModelDownload(
         url = "https://github.com/TRvlvr/model_repo/releases/download/all_public_uvr_models/$file",
         sha256 = sha256,

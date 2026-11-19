@@ -114,6 +114,16 @@ class SearchViewModel(private val sources: List<Source>, private val library: Li
 
     private var resolving: Job? = null
 
+    /**
+     * A result was tapped: one added before opens its Track as it is, without the import options
+     * (as a shared link to it does, ADR 14); any other opens its preview.
+     */
+    fun choose(candidate: SourceCandidate, open: (TrackId) -> Unit) {
+        viewModelScope.launch {
+            if (library.contains(candidate.id)) open(candidate.id) else preview(candidate)
+        }
+    }
+
     /** Opens the preview of [candidate] and starts streaming its audio. */
     fun preview(candidate: SourceCandidate) {
         resolving?.cancel() // an earlier preview still resolving must not start playing
@@ -174,7 +184,7 @@ fun SearchRoute(sources: List<Source>, library: Library, choices: ModelChoices, 
         onQuery = viewModel::setQuery,
         onToggleSource = viewModel::toggle,
         onSearch = viewModel::search,
-        onPreview = viewModel::preview,
+        onChoose = { viewModel.choose(it, onAdded) },
     )
     preview?.let { candidate ->
         PreviewSheet(
@@ -182,7 +192,7 @@ fun SearchRoute(sources: List<Source>, library: Library, choices: ModelChoices, 
             sourceName = sources.nameOf(candidate),
             player = playing,
             onTogglePlay = viewModel.player::toggle,
-            choice = rememberImportChoice(choices),
+            choice = rememberImportChoice(choices, key = candidate),
             onAdd = { vocalFree, model -> viewModel.add(candidate, vocalFree, model, onAdded) },
             onDismiss = viewModel::closePreview,
         )
@@ -201,7 +211,8 @@ fun SearchScreen(
     onQuery: (String) -> Unit,
     onToggleSource: (SourceId) -> Unit,
     onSearch: () -> Unit,
-    onPreview: (SourceCandidate) -> Unit,
+    /** A result was tapped: its preview opens, or its Track if it is in the Library already. */
+    onChoose: (SourceCandidate) -> Unit,
 ) {
     Scaffold(topBar = { TopAppBar(title = { Text("Search songs") }) }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -229,7 +240,7 @@ fun SearchScreen(
                         leadingContent = { RemoteImage(candidate.thumbnailUrl, Modifier.width(96.dp).aspectRatio(16f / 9f)) },
                         headlineContent = { Text(candidate.title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
                         supportingContent = { Text(candidate.details(sources.nameOf(candidate)), maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                        modifier = Modifier.clickable { onPreview(candidate) },
+                        modifier = Modifier.clickable { onChoose(candidate) },
                     )
                     HorizontalDivider()
                 }

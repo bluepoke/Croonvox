@@ -35,7 +35,7 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform()
-    // The contract test downloads the real models once and keeps it across builds (and CI runs).
+    // The contract test downloads the real models once and keeps them across builds (and CI runs).
     systemProperty("modelCache", gradle.gradleUserHomeDir.resolve("caches/croonvox-models").path)
     maxHeapSize = "2g"
     jvmArgs("--enable-native-access=ALL-UNNAMED") // ONNX Runtime loads its native library

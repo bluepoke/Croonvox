@@ -124,9 +124,13 @@ class ImportChoice(private val choices: ModelChoices) {
     }
 }
 
+/**
+ * The import choice for the song [key] stands for: it starts afresh (Default Separation Model, "No
+ * vocals" unset) for each new song, even when one import sheet replaces another.
+ */
 @Composable
-fun rememberImportChoice(choices: ModelChoices): ImportChoice {
-    val choice = remember(choices) { ImportChoice(choices) }
+fun rememberImportChoice(choices: ModelChoices, key: Any): ImportChoice {
+    val choice = remember(choices, key) { ImportChoice(choices) }
     LaunchedEffect(choice) { choice.load() }
     return choice
 }

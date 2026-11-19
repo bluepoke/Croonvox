@@ -35,6 +35,9 @@ The separation spike (#3, findings in `docs/spikes/separation-spike.md`) ran ADR
 - The foreground service type is `mediaProcessing` from Android 15 and `dataSync` before. Android 12+ may refuse to start a foreground service for a job that starts in the background (e.g. after process death); the job then runs without one and, if the system stops it, continues later from its checkpoint.
 - Checkpoints are 4-channel 24-bit FLAC files per segment at the model's rate, and a resumed run decodes the Original Audio again from the start. The overlapping segment before the first missing one is separated again, so the result matches an uninterrupted run exactly.
 
+## Note: interim UVR download (#17, 2026-11-18)
+- Medium and Best are downloaded from the UVR model repository, against the distribution rule above, until that is resolved: see ADR 19's note "Interim download, against the license gate".
+
 ## Consequences
 - "Instrumental" and "Vocal Stem" depend on the Separation Model: whether backing vocals count as removed vocal is up to the model (see `GLOSSARY.md`).
 - On the weak device, Fast takes about 0.16× the Track's length and Best about 3.4×, so Best takes about 13 min for a 4-minute song and about 32 min for a 9-minute one. The UI has to treat Best as a long background job.
