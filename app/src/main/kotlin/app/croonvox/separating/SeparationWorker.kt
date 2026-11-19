@@ -44,7 +44,7 @@ class SeparationWorker(context: Context, params: WorkerParameters) : CoroutineWo
         val notifying = if (waiting) {
             showProgress(track)
             launch {
-                container.trackRepository.observe(id).filterNotNull().distinctUntilChanged { a, b -> a.pipeline == b.pipeline }
+                container.trackRepository.observe(id).filterNotNull().distinctUntilChanged { a, b -> a.pipeline == b.pipeline && a.title == b.title }
                     .collect { showProgress(it) }
             }
         } else {

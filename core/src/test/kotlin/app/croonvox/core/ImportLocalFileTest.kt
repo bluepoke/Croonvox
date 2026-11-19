@@ -3,12 +3,14 @@ package app.croonvox.core
 
 import app.croonvox.core.library.ImportLocalFile
 import app.croonvox.core.library.Library
+import app.croonvox.core.library.RenameTrack
 import app.croonvox.core.model.SeparationModelId
 import app.croonvox.core.model.SourceId
 import app.croonvox.core.model.Track
 import app.croonvox.core.model.TrackId
 import app.croonvox.core.model.TrackPipelineState
 import app.croonvox.core.testing.FakeLocalFile
+import app.croonvox.core.testing.InMemoryLyricsRepository
 import app.croonvox.core.testing.InMemoryTrackFiles
 import app.croonvox.core.testing.InMemoryTakeRepository
 import app.croonvox.core.testing.InMemoryTrackRepository
@@ -52,6 +54,18 @@ class ImportLocalFileTest {
         assertEquals(first, again)
         assertEquals(listOf(first), library.tracks().first())
         assertEquals(emptySet(), files.pendingStaged)
+    }
+
+    @Test
+    fun `re-importing a renamed Track's file keeps the user's name`() = runTest {
+        val track = import(FakeLocalFile(displayName = "take-five.flac", content = "audio-1"))
+        RenameTrack(tracks, InMemoryLyricsRepository())(track.id, title = "Take Five", artist = "Dave Brubeck")
+
+        import(FakeLocalFile(displayName = "take-five.flac", content = "audio-1"))
+
+        val again = tracks.get(track.id)!!
+        assertEquals("Take Five", again.title)
+        assertEquals("Dave Brubeck", again.artist)
     }
 
     @Test

@@ -3,6 +3,7 @@ package app.croonvox.core
 
 import app.croonvox.core.library.Library
 import app.croonvox.core.library.LibraryEntry
+import app.croonvox.core.library.RenameTrack
 import app.croonvox.core.mix.Mixes
 import app.croonvox.core.model.OutputRoute
 import app.croonvox.core.model.SeparationModelId
@@ -15,6 +16,7 @@ import app.croonvox.core.model.Transpose
 import app.croonvox.core.session.Sessions
 import app.croonvox.core.testing.FakeAudioEngine
 import app.croonvox.core.testing.FakeSource
+import app.croonvox.core.testing.InMemoryLyricsRepository
 import app.croonvox.core.testing.InMemoryMixRepository
 import app.croonvox.core.testing.InMemorySettingsRepository
 import app.croonvox.core.testing.InMemoryTakeRepository
@@ -69,6 +71,19 @@ class LibraryTest {
 
         assertEquals(first, second)
         assertEquals(listOf(first), library.tracks().first())
+    }
+
+    @Test
+    fun `adding a renamed Track's Source item again keeps the user's name`() = runTest {
+        val candidate = source.search("fly me").single()
+        val track = library.add(candidate)
+        RenameTrack(tracks, InMemoryLyricsRepository())(track.id, title = "Fly Me (rehearsal key)", artist = null)
+
+        library.add(candidate)
+
+        val again = tracks.get(track.id)!!
+        assertEquals("Fly Me (rehearsal key)", again.title)
+        assertEquals(null, again.artist)
     }
 
     @Test

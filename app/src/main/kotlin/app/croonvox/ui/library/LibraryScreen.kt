@@ -5,7 +5,7 @@ import android.net.Uri
 import android.text.format.DateUtils
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -23,6 +24,7 @@ import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -43,14 +45,18 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import app.croonvox.core.library.Library
 import app.croonvox.core.library.LibraryEntry
+import app.croonvox.core.library.RenameTrack
+import app.croonvox.core.model.Track
 import app.croonvox.core.model.TrackId
 import app.croonvox.importing.Importer
 import app.croonvox.ui.subtitle
+import app.croonvox.ui.theme.CroonvoxButtonShape
 import app.croonvox.ui.theme.CroonvoxTheme
 
 @Composable
 fun LibraryRoute(
     library: Library,
+    renameTrack: RenameTrack,
     importer: Importer,
     /** A file was picked: the import sheet asks how to add it (ADR 19). */
     onPicked: (Uri) -> Unit,
@@ -59,7 +65,7 @@ fun LibraryRoute(
     onSettings: () -> Unit,
     onSearch: (() -> Unit)? = null,
 ) {
-    val viewModel: LibraryViewModel = viewModel(factory = viewModelFactory { initializer { LibraryViewModel(library) } })
+    val viewModel: LibraryViewModel = viewModel(factory = viewModelFactory { initializer { LibraryViewModel(library, renameTrack) } })
     val state by viewModel.state.collectAsStateWithLifecycle()
     val importing by importer.importing.collectAsStateWithLifecycle()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -70,6 +76,7 @@ fun LibraryRoute(
         importing = importing > 0,
         onImport = { picker.launch(arrayOf("audio/*", "video/*")) },
         onOpen = onOpen,
+        onRename = viewModel::rename,
         onStorage = onStorage,
         onSettings = onSettings,
         onSearch = onSearch,
@@ -83,6 +90,8 @@ fun LibraryScreen(
     importing: Boolean = false,
     onImport: () -> Unit = {},
     onOpen: (TrackId) -> Unit = {},
+    /** Renames a Track: its title (never blank) and its artist (null clears it). */
+    onRename: (TrackId, String, String?) -> Unit = { _, _, _ -> },
     onStorage: () -> Unit = {},
     onSettings: () -> Unit = {},
     /** Opens the search; null when the app has no network Sources (local flavor). */
@@ -120,7 +129,7 @@ fun LibraryScreen(
                     CircularProgressIndicator()
                 }
                 is LibraryUiState.Loaded ->
-                    if (state.entries.isEmpty()) EmptyLibrary() else TrackList(state.entries, onOpen)
+                    if (state.entries.isEmpty()) EmptyLibrary() else TrackList(state.entries, onOpen, onRename)
             }
         }
     }
@@ -145,26 +154,75 @@ private fun EmptyLibrary() {
 }
 
 @Composable
-private fun TrackList(entries: List<LibraryEntry>, onOpen: (TrackId) -> Unit) {
+private fun TrackList(entries: List<LibraryEntry>, onOpen: (TrackId) -> Unit, onRename: (TrackId, String, String?) -> Unit) {
+    var renaming by remember { mutableStateOf<Track?>(null) }
     // Bottom padding keeps the last row clear of the floating button.
     LazyColumn(contentPadding = PaddingValues(bottom = 88.dp)) {
         items(entries, key = { it.track.id.key }) { entry ->
-            ListItem(
-                modifier = Modifier.clickable { onOpen(entry.track.id) },
-                headlineContent = { Text(entry.track.title) },
-                supportingContent = {
-                    Column {
-                        Text(entry.track.subtitle())
-                        Text(
-                            "${takeCount(entry.takeCount)} · ${lastSung(entry.track.lastSessionAt)}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                },
-            )
+            var menu by remember { mutableStateOf(false) }
+            Box {
+                TrackRow(entry, onClick = { onOpen(entry.track.id) }, onLongClick = { menu = true })
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    DropdownMenuItem(
+                        text = { Text("Rename") },
+                        onClick = {
+                            menu = false
+                            renaming = entry.track
+                        },
+                    )
+                }
+            }
         }
     }
+    renaming?.let { track ->
+        RenameTrackDialog(
+            track = track,
+            onRename = { title, artist ->
+                onRename(track.id, title, artist)
+                renaming = null
+            },
+            onDismiss = { renaming = null },
+        )
+    }
+}
+
+@Composable
+private fun TrackRow(entry: LibraryEntry, onClick: () -> Unit, onLongClick: () -> Unit) {
+    ListItem(
+        modifier = Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick),
+        headlineContent = { Text(entry.track.title) },
+        supportingContent = {
+            Column {
+                Text(entry.track.subtitle())
+                Text(
+                    "${takeCount(entry.takeCount)} · ${lastSung(entry.track.lastSessionAt)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+    )
+}
+
+/** Edits a Track's title and artist; Rename stays disabled while the title is blank. */
+@Composable
+private fun RenameTrackDialog(track: Track, onRename: (title: String, artist: String?) -> Unit, onDismiss: () -> Unit) {
+    var title by remember(track.id) { mutableStateOf(track.title) }
+    var artist by remember(track.id) { mutableStateOf(track.artist.orEmpty()) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Rename song") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(value = title, onValueChange = { title = it }, Modifier.fillMaxWidth(), label = { Text("Title") }, singleLine = true)
+                OutlinedTextField(value = artist, onValueChange = { artist = it }, Modifier.fillMaxWidth(), label = { Text("Artist") }, singleLine = true)
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onRename(title, artist) }, enabled = title.isNotBlank(), shape = CroonvoxButtonShape) { Text("Rename") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss, shape = CroonvoxButtonShape) { Text("Cancel") } },
+    )
 }
 
 private fun takeCount(count: Int): String = when (count) {

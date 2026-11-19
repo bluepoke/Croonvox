@@ -77,7 +77,7 @@ class MainActivity : ComponentActivity() {
                 NavHost(nav, startDestination = LIBRARY) {
                     composable(LIBRARY) {
                         LibraryRoute(
-                            container.library, container.importer,
+                            container.library, container.renameTrack, container.importer,
                             onPicked = ::askToImport,
                             onOpen = { nav.openTrack(it) },
                             onStorage = { nav.navigate(STORAGE) },

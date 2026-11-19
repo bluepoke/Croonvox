@@ -4,6 +4,7 @@ package app.croonvox.core
 import app.croonvox.core.export.BackingExportOptions
 import app.croonvox.core.export.BackingExportUnavailable
 import app.croonvox.core.export.ExportBacking
+import app.croonvox.core.library.RenameTrack
 import app.croonvox.core.model.BackingChoice
 import app.croonvox.core.model.PipelineStep
 import app.croonvox.core.model.SeparationModelId
@@ -16,6 +17,7 @@ import app.croonvox.core.port.ExportFormat
 import app.croonvox.core.port.ExportTags
 import app.croonvox.core.testing.FakeExportStore
 import app.croonvox.core.testing.FakeOfflineRenderer
+import app.croonvox.core.testing.InMemoryLyricsRepository
 import app.croonvox.core.testing.InMemoryTrackFiles
 import app.croonvox.core.testing.InMemoryTrackRepository
 import kotlinx.coroutines.launch
@@ -103,6 +105,16 @@ class ExportBackingTest {
 
         assertEquals(emptyList(), exportBacking.options(trackId).layers)
         assertFailsWith<BackingExportUnavailable> { exportBacking.export(trackId, BackingChoice.OriginalAudio, Transpose.None, ExportFormat.Wav()) }
+    }
+
+    @Test
+    fun `an export after a rename is titled and tagged with the new name`() = runTest {
+        addTrack(TrackPipelineState.Ready(FAST))
+        RenameTrack(tracks, InMemoryLyricsRepository())(trackId, title = "Fly Me", artist = "Sinatra")
+
+        exportBacking.export(trackId, BackingChoice.Instrumental, Transpose(2), ExportFormat.Wav())
+
+        assertEquals(ExportTags("Fly Me (Instrumental, +2)", artist = "Sinatra"), store.exports.single().tags)
     }
 
     @Test

@@ -5,15 +5,23 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.croonvox.core.library.Library
 import app.croonvox.core.library.LibraryEntry
+import app.croonvox.core.library.RenameTrack
+import app.croonvox.core.model.TrackId
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
-class LibraryViewModel(library: Library) : ViewModel() {
+class LibraryViewModel(library: Library, private val renameTrack: RenameTrack) : ViewModel() {
     val state: StateFlow<LibraryUiState> = library.entries()
         .map { LibraryUiState.Loaded(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryUiState.Loading)
+
+    /** The dialog keeps Rename disabled for a blank title, so [RenameTrack] never refuses it here. */
+    fun rename(track: TrackId, title: String, artist: String?) {
+        viewModelScope.launch { renameTrack(track, title, artist) }
+    }
 }
 
 sealed interface LibraryUiState {

@@ -7,6 +7,7 @@ import app.croonvox.core.export.ExportBacking
 import app.croonvox.core.library.ImportLocalFile
 import app.croonvox.core.library.Library
 import app.croonvox.core.library.LookUpSharedLink
+import app.croonvox.core.library.RenameTrack
 import app.croonvox.core.library.TrackFiles
 import app.croonvox.core.library.TrackRepository
 import app.croonvox.core.library.TrackStorage
@@ -76,6 +77,7 @@ class AppContainer(private val context: Context) {
     val mixRepository: MixRepository by lazy { RoomMixRepository(database) }
 
     val library: Library by lazy { Library(trackRepository, takeRepository) }
+    val renameTrack: RenameTrack by lazy { RenameTrack(trackRepository, lyricsRepository) }
     val trackStorage: TrackStorage by lazy {
         TrackStorage(trackRepository, takeRepository, mixRepository, trackFiles, pipelineJobs, SeparationCatalogue.models.map { it.id })
     }
