@@ -12,7 +12,6 @@ import app.croonvox.core.model.TakeId
 import app.croonvox.core.model.Track
 import app.croonvox.core.model.TrackId
 import app.croonvox.core.model.TrackPipelineState
-import app.croonvox.core.pipeline.DefaultSeparationModel
 import app.croonvox.core.pipeline.SeparateTrack
 import app.croonvox.core.pipeline.TrackPipeline
 import app.croonvox.core.pipeline.VocalFreeToggle
@@ -44,7 +43,7 @@ class VocalFreeTest {
     private val jobs = FakePipelineJobs()
     private val mixes = InMemoryMixRepository()
     private val vocalFree = VocalFreeToggle(tracks, files, jobs, mixes, models = listOf(FAST, BEST))
-    private val pipeline = TrackPipeline(tracks, jobs, DefaultSeparationModel(InMemorySettingsRepository(), listOf(FAST, BEST), fallback = FAST))
+    private val pipeline = TrackPipeline(tracks, jobs, unpickedModel = FAST)
     private val id = TrackId(SourceId.Local, "abc")
 
     private suspend fun addTrack(pipeline: TrackPipelineState, vocalFree: Boolean = false) =

@@ -99,7 +99,10 @@ object SeparationCatalogue {
         )
     }
 
-    /** The model Separation falls back to when no Default Separation Model is set, or it left the catalogue (ADR 19). */
+    /**
+     * Fast: the model Separation falls back to when no Default Separation Model is set, or it left the
+     * catalogue, and the one Tracks added before models could be picked are separated with (ADR 19, #36).
+     */
     val default: SeparationModel = spleeter2Stems
 
     /** Fastest first, as the model picker lists them. */

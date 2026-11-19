@@ -105,7 +105,7 @@ class AppContainer(private val context: Context) {
     /** Stops Separation jobs of earlier versions before the Track Pipeline queues them again (#28). */
     suspend fun stopLegacySeparations() = pipelineJobs.stopLegacySeparations()
     val trackPipeline: TrackPipeline by lazy {
-        TrackPipeline(trackRepository, pipelineJobs, defaultSeparationModel, downloadFrom = sources.map { it.id }.toSet())
+        TrackPipeline(trackRepository, pipelineJobs, unpickedModel = SeparationCatalogue.default.id, downloadFrom = sources.map { it.id }.toSet())
     }
 
     // Network Sources (ADR 1): none in the local flavor.

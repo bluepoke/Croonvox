@@ -3,6 +3,7 @@ package app.croonvox.core
 
 import app.croonvox.core.library.ImportLocalFile
 import app.croonvox.core.library.Library
+import app.croonvox.core.library.TrackRepository
 import app.croonvox.core.mix.Mixes
 import app.croonvox.core.model.PipelineStep
 import app.croonvox.core.model.SeparationModelId
@@ -16,7 +17,6 @@ import app.croonvox.core.pipeline.VocalFreeToggle
 import app.croonvox.core.port.SeparationProgress
 import app.croonvox.core.session.BackingAudio
 import app.croonvox.core.session.Sessions
-import app.croonvox.core.session.SettingsRepository
 import app.croonvox.core.session.backingAudio
 import app.croonvox.core.testing.FakeAudioEngine
 import app.croonvox.core.testing.FakeLocalFile
@@ -49,20 +49,21 @@ class TrackPipelineTest {
     private val medium = SeparationModelId("medium")
     private val best = SeparationModelId("best")
     private val settings = InMemorySettingsRepository()
+    private val defaultModel = DefaultSeparationModel(settings, listOf(fast, medium, best), fallback = fast)
 
-    /** Runs once, while the Track Pipeline looks up the Default Separation Model. */
-    private var duringDefaultLookup: (suspend () -> Unit)? = null
-    private val defaultModel = DefaultSeparationModel(
-        object : SettingsRepository by settings {
-            override suspend fun defaultSeparationModel(): SeparationModelId? {
-                duringDefaultLookup?.also { duringDefaultLookup = null }?.invoke()
-                return settings.defaultSeparationModel()
+    /** Runs once, after the Track Pipeline saw a Library change and before it updates a Track. */
+    private var beforeUpdate: (suspend () -> Unit)? = null
+    private val pipeline = TrackPipeline(
+        object : TrackRepository by tracks {
+            override suspend fun update(id: TrackId, change: (Track) -> Track?): Track? {
+                beforeUpdate?.also { beforeUpdate = null }?.invoke()
+                return tracks.update(id, change)
             }
         },
-        listOf(fast, medium, best),
-        fallback = fast,
+        jobs,
+        unpickedModel = fast,
+        downloadFrom = setOf(youtube),
     )
-    private val pipeline = TrackPipeline(tracks, jobs, defaultModel, downloadFrom = setOf(youtube))
 
     private fun TestScope.startPipeline() {
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { pipeline.run() }
@@ -79,7 +80,8 @@ class TrackPipelineTest {
     }
 
     @Test
-    fun `a Downloaded Track is separated with the model chosen when it was added`() = runTest {
+    fun `a Downloaded Track is separated with the model chosen when it was added, not the default`() = runTest {
+        defaultModel.set(medium)
         startPipeline()
 
         val track = import(FakeLocalFile(displayName = "song.mp3", content = "audio-1"), separationModel = best)
@@ -89,14 +91,16 @@ class TrackPipelineTest {
     }
 
     @Test
-    fun `a Track added without a model choice is separated with the Default Separation Model`() = runTest {
-        defaultModel.set(medium)
+    fun `a Track without a picked model is separated with Fast, whatever the Default Separation Model is`() = runTest {
+        // Best may not be downloaded, and setting the default asks no download consent (ADR 19).
+        defaultModel.set(best)
         startPipeline()
 
-        // E.g. added before models could be chosen.
+        // E.g. added before models could be picked.
         val track = import(FakeLocalFile(displayName = "song.mp3", content = "audio-1"))
 
-        assertEquals(TrackPipelineState.Separating(medium), tracks.get(track.id)?.pipeline)
+        assertEquals(TrackPipelineState.Separating(fast), tracks.get(track.id)?.pipeline)
+        assertEquals(listOf(FakePipelineJobs.Separation(track.id, fast)), jobs.separations)
     }
 
     @Test
@@ -118,7 +122,8 @@ class TrackPipelineTest {
     }
 
     @Test
-    fun `retrying a Track whose Separation failed queues it again with the default model`() = runTest {
+    fun `retrying the failed Separation of a Track without a picked model uses Fast too`() = runTest {
+        defaultModel.set(best)
         startPipeline()
         val track = import(FakeLocalFile(displayName = "song.mp3", content = "audio-1"))
         tracks.updatePipeline(track.id, TrackPipelineState.Failed(PipelineStep.Separating, "out of memory"))
@@ -315,7 +320,7 @@ class TrackPipelineTest {
         tracks.updatePipeline(track.id, TrackPipelineState.Added) // its import is still finishing
         val vocalFree = VocalFreeToggle(tracks, files, jobs, InMemoryMixRepository(), listOf(fast, medium, best))
         // The user unmarks it, picking Best, after the Track Pipeline saw it Vocal-Free and Downloaded.
-        duringDefaultLookup = { vocalFree.unmark(track.id, best) }
+        beforeUpdate = { vocalFree.unmark(track.id, best) }
         startPipeline()
 
         tracks.updatePipeline(track.id, TrackPipelineState.Downloaded)

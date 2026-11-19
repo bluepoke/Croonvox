@@ -11,14 +11,18 @@ import app.croonvox.core.model.TrackPipelineState
 /**
  * Moves Tracks through the Track Pipeline (ADR 10): a Track added from one of the network Sources
  * in [downloadFrom] is queued for download, and every Track that reaches Downloaded is queued for
- * Separation with the model chosen when it was added, or the [defaultModel] (ADR 19), or is Ready
- * at once if it is Vocal-Free (ADR 14). Local imports aren't downloaded: a local Track left in
- * Added is an import that never finished, and importing the file again completes it.
+ * Separation with the model picked for it (ADR 19), or is Ready at once if it is Vocal-Free (ADR 14).
+ * Local imports aren't downloaded: a local Track left in Added is an import that never finished,
+ * and importing the file again completes it.
+ *
+ * A Track added before models could be picked has none; it is separated with [unpickedModel], which
+ * the app sets to Fast. Not the Default Separation Model: Settings sets the default without download
+ * consent, and the user never picked it for these Tracks (ADR 19, #36).
  */
 class TrackPipeline(
     private val tracks: TrackRepository,
     private val jobs: PipelineJobs,
-    private val defaultModel: DefaultSeparationModel,
+    private val unpickedModel: SeparationModelId,
     private val downloadFrom: Set<SourceId> = emptySet(),
 ) {
     /** Follows the Library until cancelled; runs for the lifetime of the app process. */
@@ -37,13 +41,12 @@ class TrackPipeline(
                     // Left Downloading by an earlier process (or queued above): make sure its job exists.
                     is TrackPipelineState.Downloading -> if (queued.add(track.id)) jobs.download(track.id)
                     TrackPipelineState.Downloaded -> {
-                        val default = defaultModel.get()
-                        var model = default
+                        var model = unpickedModel
                         // One atomic step, so marking or unmarking the Track Vocal-Free meanwhile is
                         // never missed: unmarking picks the model, so it is read from the Track as it is now.
                         val next = tracks.update(track.id) { now ->
                             if (now.pipeline != TrackPipelineState.Downloaded) return@update null
-                            model = now.separationModel ?: default
+                            model = now.separationModel ?: unpickedModel
                             // A Vocal-Free Track skips Separation (ADR 14).
                             now.copy(pipeline = if (now.vocalFree) TrackPipelineState.Ready(model = null) else TrackPipelineState.Separating(model))
                         }
