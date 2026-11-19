@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package app.croonvox.engine
 
-/** JNI surface of the native `OfflineMixRender`. Every handle from [create] must be [release]d. Use [OfflineMixRenderer]. */
+/** JNI surface of the native `OfflineMixRender`. Every handle from [create] must be [release]d. Use [NativeOfflineRenderer]. */
 internal object NativeMixRender {
     init {
         System.loadLibrary("croonvox_engine")
     }
+
+    /** As `to`: render until the Backing Audio ends (the native `kUntilEnd`). */
+    const val UNTIL_END = Long.MAX_VALUE
 
     /** Gains are linear; Take sample j sounds at timeline frame takeStart + j − alignment. */
     external fun create(

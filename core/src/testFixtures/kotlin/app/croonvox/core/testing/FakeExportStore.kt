@@ -3,12 +3,14 @@ package app.croonvox.core.testing
 
 import app.croonvox.core.port.ExportFormat
 import app.croonvox.core.port.ExportStore
+import app.croonvox.core.port.ExportTags
 import app.croonvox.core.port.ExportWriter
 import app.croonvox.core.port.ExportedFile
 
 /** Keeps Exports in memory: what was written to each, and whether it was committed or aborted. */
 class FakeExportStore : ExportStore {
-    class Written(val title: String, val format: ExportFormat, val sampleRate: Int, val frames: Long) {
+    class Written(val tags: ExportTags, val format: ExportFormat, val sampleRate: Int, val frames: Long?) {
+        val title: String get() = tags.title
         var framesWritten = 0L
         var committed = false
         var aborted = false
@@ -16,8 +18,8 @@ class FakeExportStore : ExportStore {
 
     val exports = mutableListOf<Written>()
 
-    override suspend fun create(title: String, format: ExportFormat, sampleRate: Int, frames: Long): ExportWriter {
-        val written = Written(title, format, sampleRate, frames).also { exports += it }
+    override suspend fun create(tags: ExportTags, format: ExportFormat, sampleRate: Int, frames: Long?): ExportWriter {
+        val written = Written(tags, format, sampleRate, frames).also { exports += it }
         return object : ExportWriter {
             override fun write(interleaved: FloatArray, frames: Int) {
                 check(!written.committed && !written.aborted) { "already finished" }
@@ -25,8 +27,9 @@ class FakeExportStore : ExportStore {
             }
 
             override suspend fun commit(): ExportedFile {
+                check(written.frames == null || written.framesWritten == written.frames) { "${written.framesWritten} of ${written.frames} frames" }
                 written.committed = true
-                return ExportedFile("content://exports/${exports.indexOf(written)}", "$title.wav")
+                return ExportedFile("content://exports/${exports.indexOf(written)}", "${tags.title}.wav")
             }
 
             override suspend fun abort() {

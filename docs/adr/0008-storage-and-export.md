@@ -24,3 +24,9 @@ The Session timeline runs at the **loaded Backing Audio's sample rate**, not the
 ## Consequences
 - The NDK build bundles LAME and a FLAC codec (libFLAC, BSD). Keep LGPL compliance for LAME (dynamic linking, offer the source).
 - Offline Sessions without a kept video fall back to audio-only.
+
+## Note: Backing Export built in #24 (2026-11-19)
+- The Track's screen (Track detail and the Session in one, ADR 20) has a **Backing track → Export** entry once the Original Audio is stored. It offers the Instrumental the Track uses (only once it is Ready with one) and the Original Audio. It starts at the Backing Audio the Track plays and at its Last Transpose. A Transpose changed there is for that export only.
+- The Offline Render renders the Backing Audio whole, from its first to its last frame, with the same `BackingRenderer` as playback (bypassed at Transpose 0, ADR 5). The length is only known at the end, so the WAV header is written over once it is.
+- **WAV only for now** (16-bit, or 24-bit), like the Mix Export. MP3, M4A/AAC and cover art come with #15 for both. A WAV carries the title and the artist in a RIFF INFO list (INAM, IART); MediaStore gets them too.
+- Titles name the layer and the Transpose: "Title (Instrumental, +2)", "Title (Original, −1)", no Transpose at 0. A Vocal-Free Track's Original Audio is called "Instrumental" (ADR 14).

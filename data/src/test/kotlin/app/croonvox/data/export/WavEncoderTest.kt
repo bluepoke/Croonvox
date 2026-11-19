@@ -72,4 +72,46 @@ class WavEncoderTest {
 
         assertFailsWith<IOException> { encoder.finish() }
     }
+
+    @Test
+    fun `title and artist go into an INFO list before the audio`() {
+        val out = ByteArrayOutputStream()
+        val encoder = WavEncoder(out, 44_100, channels = 2, bitsPerSample = 16, frames = 1, tags = WavTags(title = "Song (Instrumental, +2)", artist = "Ab"))
+        encoder.write(floatArrayOf(0f, 0f), 1)
+        encoder.finish()
+        val bytes = out.toByteArray()
+        val le = bytes.le()
+
+        // "Song (Instrumental, +2)" is 23 bytes, 24 with its NUL; "Ab" is 3 with its NUL, padded to 4.
+        assertEquals("LIST", bytes.ascii(36))
+        assertEquals(4 + 8 + 24 + 8 + 4, le.getInt(40))
+        assertEquals("INFO", bytes.ascii(44))
+        assertEquals("INAM", bytes.ascii(48))
+        assertEquals(24, le.getInt(52))
+        assertEquals("Song (Instrumental, +2)", String(bytes.copyOfRange(56, 79), Charsets.UTF_8))
+        assertEquals(0, bytes[79].toInt())
+        assertEquals("IART", bytes.ascii(80))
+        assertEquals(3, le.getInt(84))
+        assertEquals("Ab", String(bytes.copyOfRange(88, 90), Charsets.UTF_8))
+        assertEquals("data", bytes.ascii(92))
+        assertEquals(4, le.getInt(96))
+        assertEquals(bytes.size - 8, le.getInt(4))
+        assertEquals(100 + 4, bytes.size)
+    }
+
+    @Test
+    fun `a WAV of unknown length gets its real header once it is finished`() {
+        val out = ByteArrayOutputStream()
+        val encoder = WavEncoder(out, 44_100, channels = 2, bitsPerSample = 16, frames = null)
+        encoder.write(FloatArray(6), 3)
+        encoder.finish()
+
+        val header = encoder.header()
+
+        assertEquals(44, header.size)
+        assertEquals(36 + 12, header.le().getInt(4))
+        assertEquals(12, header.le().getInt(40))
+        // What was written first has the same size, so the real header goes over it.
+        assertEquals(44 + 12, out.size())
+    }
 }

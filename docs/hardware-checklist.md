@@ -94,3 +94,16 @@ Prerequisites: a Ready Track, wired headphones, the loopback set-up from #8, and
 8. **Several Mixes.** Tap "New Mix" on a Take: "Mix 2" opens in the editor. Give it other levels: both Mixes keep their own. Delete Mix 1: the Take and Mix 2 stay. Delete the Take: its Mixes go, and the exported files stay.
 9. **Vocal-Free.** On a Track with a Mix on the Instrumental, turn Vocal-Free on: the Mix now says "Original", and its editor shows no Backing Audio choice. Turn it off and let Separation finish: the Mix stays on Original until you choose Instrumental in its editor.
 10. **Re-separation.** Re-separate a Track with another model while its Mix is on the Instrumental, delete the old model's stems in Storage, then export the Mix: it uses the new Instrumental and stays in sync.
+
+## Backing Export (#24)
+
+Prerequisites: a Ready Track whose Last Transpose is not 0 (e.g. +2), a Track that is still Separating, and a Vocal-Free Track. You'll also need an app that shows tags (a music player or a file manager's details).
+
+1. **Entry.** On the Track's screen, "Backing track → Export" shows once the song is downloaded, also before vocal removal finishes. The sheet starts on the Backing Audio the Track plays and at its Last Transpose (+2).
+2. **Instrumental.** Export the Instrumental at +2 (16-bit): the progress runs to 100 %, and `Music/Croonvox/<Title> (Instrumental, +2).wav` appears. It is the whole song, its length matches the Track, it is 2 semitones up at the same tempo, and it sounds like the Session at +2. The music player shows the title "<Title> (Instrumental, +2)" and the original artist.
+3. **Export-only Transpose.** Change the sheet's Transpose to −1 and export the Original Audio: "<Title> (Original, −1).wav". Close the sheet: the Session's Transpose is still +2, and so is the next Session's.
+4. **Transpose 0.** Export the Original Audio at 0: "<Title> (Original).wav", indistinguishable from the original.
+5. **Before Ready.** On the Separating Track, only the Original Audio is offered, with a note that the instrumental comes once vocal removal is done.
+6. **Vocal-Free.** On the Vocal-Free Track, export at +3: no layer choice is shown, and the file is "<Title> (Instrumental, +3).wav".
+7. **Cancel and share.** Cancel an export at about 30 %: no file is left in `Music/Croonvox/`. Close the sheet during an export: same result. After an export, Share sends a playable WAV.
+8. **24-bit.** Export at 24-bit: the file is 24-bit stereo at the Track's sample rate.

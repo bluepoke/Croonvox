@@ -5,50 +5,73 @@ import android.content.ContentResolver
 import android.content.ContentValues
 import android.net.Uri
 import android.os.Environment
+import android.os.ParcelFileDescriptor
 import android.provider.MediaStore
 import app.croonvox.core.port.ExportFormat
 import app.croonvox.core.port.ExportStore
+import app.croonvox.core.port.ExportTags
 import app.croonvox.core.port.ExportWriter
 import app.croonvox.core.port.ExportedFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
+import java.io.FileOutputStream
 import java.io.IOException
-import java.io.OutputStream
+import java.nio.ByteBuffer
 
 /**
  * [ExportStore] in MediaStore's `Music/Croonvox/` (ADR 8). A file is pending, so other apps don't
  * see it, until it is complete. Needs no permission from Android 10 (the app's minimum).
  */
 class MediaStoreExports(private val resolver: ContentResolver) : ExportStore {
-    override suspend fun create(title: String, format: ExportFormat, sampleRate: Int, frames: Long): ExportWriter =
+    override suspend fun create(tags: ExportTags, format: ExportFormat, sampleRate: Int, frames: Long?): ExportWriter =
         // Not cancelled half-way: a row inserted but not handed back would stay pending behind the user.
         withContext(Dispatchers.IO + NonCancellable) {
             val wav = format as ExportFormat.Wav
             val values = ContentValues().apply {
-                put(MediaStore.Audio.Media.DISPLAY_NAME, "${fileName(title)}.wav")
-                put(MediaStore.Audio.Media.TITLE, title)
+                put(MediaStore.Audio.Media.DISPLAY_NAME, "${fileName(tags.title)}.wav")
+                put(MediaStore.Audio.Media.TITLE, tags.title)
+                tags.artist?.let { put(MediaStore.Audio.Media.ARTIST, it) }
                 put(MediaStore.Audio.Media.MIME_TYPE, WAV_MIME_TYPE)
                 put(MediaStore.Audio.Media.RELATIVE_PATH, "${Environment.DIRECTORY_MUSIC}/Croonvox")
                 put(MediaStore.Audio.Media.IS_PENDING, 1)
             }
             val collection = MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
             val uri = resolver.insert(collection, values) ?: throw IOException("could not create an Export in Music/Croonvox")
-            val stream = try {
-                resolver.openOutputStream(uri, "w")?.buffered(BUFFER_BYTES) ?: throw IOException("could not open $uri")
+            // "rw": a file of unknown length gets its header written over at the end.
+            val descriptor = try {
+                resolver.openFileDescriptor(uri, "rw") ?: throw IOException("could not open $uri")
             } catch (e: Exception) {
                 resolver.delete(uri, null, null)
                 throw e
             }
-            Writer(uri, stream, WavEncoder(stream, sampleRate, channels = 2, bitsPerSample = wav.bitsPerSample, frames = frames))
+            Writer(uri, descriptor, wav.bitsPerSample, sampleRate, frames, WavTags(tags.title, tags.artist))
         }
 
-    private inner class Writer(private val uri: Uri, private val stream: OutputStream, private val encoder: WavEncoder) : ExportWriter {
+    private inner class Writer(
+        private val uri: Uri,
+        private val descriptor: ParcelFileDescriptor,
+        bitsPerSample: Int,
+        sampleRate: Int,
+        frames: Long?,
+        tags: WavTags,
+    ) : ExportWriter {
+        private val file = FileOutputStream(descriptor.fileDescriptor)
+        private val stream = file.buffered(BUFFER_BYTES)
+        private val encoder = WavEncoder(stream, sampleRate, channels = 2, bitsPerSample = bitsPerSample, frames = frames, tags = tags)
+        private val patchHeader = frames == null
+
         override fun write(interleaved: FloatArray, frames: Int) = encoder.write(interleaved, frames)
+
+        private fun close() {
+            runCatching { stream.close() }
+            runCatching { descriptor.close() }
+        }
 
         override suspend fun commit(): ExportedFile = withContext(Dispatchers.IO) {
             encoder.finish()
-            stream.close()
+            if (patchHeader) file.channel.write(ByteBuffer.wrap(encoder.header()), 0)
+            close()
             resolver.update(uri, ContentValues().apply { put(MediaStore.Audio.Media.IS_PENDING, 0) }, null, null)
             // MediaStore may have renamed it, e.g. "Song (Mix 1) (1).wav" next to an earlier Export.
             val name = resolver.query(uri, arrayOf(MediaStore.Audio.Media.DISPLAY_NAME), null, null, null)?.use { cursor ->
@@ -59,7 +82,7 @@ class MediaStoreExports(private val resolver: ContentResolver) : ExportStore {
 
         override suspend fun abort() {
             withContext(Dispatchers.IO) {
-                runCatching { stream.close() }
+                close()
                 resolver.delete(uri, null, null)
             }
         }

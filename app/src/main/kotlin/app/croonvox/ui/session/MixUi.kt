@@ -188,7 +188,7 @@ internal fun MixEditorSheet(
                     )
                 }
             }
-            ExportSection(editor.export, actions)
+            ExportSection(editor.export, actions.onExport, actions.onCancelExport)
         }
     }
 }
@@ -274,9 +274,12 @@ private fun StoreWhenSettled(settings: MixSettings, onDone: () -> Unit) {
     }
 }
 
-/** WAV, 16-bit by default or 24-bit, to Music/Croonvox, then shared if the user wants (ADR 8). */
+/**
+ * WAV, 16-bit by default or 24-bit, to Music/Croonvox, then shared if the user wants (ADR 8): for a
+ * Mix and for a Backing Export alike.
+ */
 @Composable
-private fun ExportSection(export: ExportProgress?, actions: MixEditorActions) {
+internal fun ExportSection(export: ExportProgress?, onExport: (bitsPerSample: Int) -> Unit, onCancel: () -> Unit) {
     var bits by remember { mutableIntStateOf(16) }
     val context = LocalContext.current
     Panel(spacing = 10.dp) {
@@ -285,14 +288,14 @@ private fun ExportSection(export: ExportProgress?, actions: MixEditorActions) {
             is ExportProgress.Running -> {
                 Text("Exporting… ${(export.progress * 100).toInt()} %", style = MaterialTheme.typography.bodyMedium)
                 LinearProgressIndicator(progress = { export.progress }, modifier = Modifier.fillMaxWidth())
-                NeutralOutlinedButton("Cancel", actions.onCancelExport, Modifier.height(44.dp))
+                NeutralOutlinedButton("Cancel", onCancel, Modifier.height(44.dp))
             }
             else -> {
                 SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                     Choice("16-bit", bits == 16, index = 0, count = 2) { bits = 16 }
                     Choice("24-bit", bits == 24, index = 1, count = 2) { bits = 24 }
                 }
-                Button(onClick = { actions.onExport(bits) }, shape = CroonvoxButtonShape, modifier = Modifier.fillMaxWidth().height(44.dp)) {
+                Button(onClick = { onExport(bits) }, shape = CroonvoxButtonShape, modifier = Modifier.fillMaxWidth().height(44.dp)) {
                     Text("Export", fontWeight = FontWeight.Bold)
                 }
                 when (export) {

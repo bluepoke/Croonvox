@@ -19,13 +19,13 @@ import kotlin.math.pow
 import kotlin.math.sin
 
 /**
- * Seam 2 (spec #1): the Offline Render of a Mix on synthetic Backing Audio and Takes (impulses,
+ * Seam 2 (spec #1): the Offline Render of a Mix and of a Backing Export on synthetic Backing Audio and Takes (impulses,
  * sine tones), stored as FLAC like stems and Takes, asserted on the rendered PCM.
  */
 @RunWith(AndroidJUnit4::class)
-class OfflineMixRendererTest {
+class NativeOfflineRendererTest {
     private val dir = File(InstrumentationRegistry.getInstrumentation().targetContext.cacheDir, "mix-render-test").apply { mkdirs() }
-    private val renderer = OfflineMixRenderer()
+    private val renderer = NativeOfflineRenderer()
 
     @After
     fun cleanUp() {
@@ -71,6 +71,44 @@ class OfflineMixRendererTest {
             }
         }
         return out.toFloatArray()
+    }
+
+    private fun renderBacking(backing: AudioFile, transpose: Transpose): Pair<FloatArray, Long> {
+        val out = ArrayList<Float>()
+        val frames = runBlocking {
+            renderer.renderBacking(backing, transpose) { interleaved, n -> for (i in 0 until n * 2) out += interleaved[i] }
+        }
+        return out.toFloatArray() to frames
+    }
+
+    @Test
+    fun aBackingExportKeepsTheLengthOfTheBackingAudioAndShiftsATestToneByTheExpectedRatio() {
+        val length = 5 * RATE + 123
+        val backing = flac("backing", 2, length) { i, _ -> 0.4f * tone(440.0, i) }
+        assertEquals(RATE, runBlocking { renderer.sampleRate(backing) })
+        for (semitones in listOf(-6, -1, 2, 6)) {
+            val (out, frames) = renderBacking(backing, Transpose(semitones))
+
+            assertEquals(length.toLong(), frames)
+            assertEquals(length, out.frames())
+            val expected = 440.0 * 2.0.pow(semitones / 12.0)
+            val measured = frequency(out, from = RATE / 2, to = length - RATE / 2)
+            assertTrue("Transpose $semitones: $measured Hz, expected $expected Hz", abs(measured / expected - 1) < 0.01)
+        }
+    }
+
+    @Test
+    fun aBackingExportAtTransposeZeroIsTransparent() {
+        val length = 3 * RATE + 7
+        val backing = flac("backing", 2, length) { i, c -> if (c == 0) 0.3f * tone(440.0, i) else 0.2f * tone(330.0, i) }
+
+        val (out, _) = renderBacking(backing, Transpose.None)
+
+        assertEquals(length, out.frames())
+        for (i in 0 until length) {
+            assertEquals(0.3f * tone(440.0, i), out[2 * i], 1e-4f)
+            assertEquals(0.2f * tone(330.0, i), out[2 * i + 1], 1e-4f)
+        }
     }
 
     private fun FloatArray.left(frame: Int) = this[frame * 2]

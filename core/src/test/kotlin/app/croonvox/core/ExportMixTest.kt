@@ -19,7 +19,7 @@ import app.croonvox.core.port.ExportFormat
 import app.croonvox.core.port.MixRender
 import app.croonvox.core.session.BackingAudio
 import app.croonvox.core.testing.FakeExportStore
-import app.croonvox.core.testing.FakeMixRenderer
+import app.croonvox.core.testing.FakeOfflineRenderer
 import app.croonvox.core.testing.InMemoryMixRepository
 import app.croonvox.core.testing.InMemoryTakeRepository
 import app.croonvox.core.testing.InMemoryTrackFiles
@@ -39,7 +39,7 @@ class ExportMixTest {
     private val takes = InMemoryTakeRepository()
     private val mixes = InMemoryMixRepository()
     private val files = InMemoryTrackFiles()
-    private val renderer = FakeMixRenderer()
+    private val renderer = FakeOfflineRenderer()
     private val store = FakeExportStore()
     private val export = ExportMix(tracks, takes, mixes, files, renderer, store)
 

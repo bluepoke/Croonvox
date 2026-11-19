@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// Offline Render of a Mix (#14, spec #1): Backing Audio plus a Take into PCM, through the same
-// BackingRenderer and mixTake() as Take playback in Review and the Mix Preview. The output is
-// timeline frames [from, to) as interleaved stereo float.
+// Offline Render (#14, #24, spec #1): Backing Audio plus a Take (a Mix) or the Backing Audio alone
+// (a Backing Export) into PCM, through the same BackingRenderer and mixTake() as real-time playback
+// (Review, the Mix Preview, a Session at a Transpose). The output is timeline frames [from, to) as
+// interleaved stereo float, or every frame of the Backing Audio with to = kUntilEnd.
 //
 // Streaming: the Take is held whole (mono), but the Backing Audio is fed in order from frame 0 and
 // only a short window of it is kept, so a Session holding the same song in memory isn't doubled.
@@ -19,7 +20,10 @@ namespace croonvox {
 
 class OfflineMixRender {
 public:
-    // Take sample j sounds at timeline frame takeStart + j − alignment; gains are linear.
+    // Take sample j sounds at timeline frame takeStart + j − alignment; gains are linear. With [to]
+    // at kUntilEnd it renders until the Backing Audio ends (a Backing Export).
+    static constexpr int64_t kUntilEnd = INT64_MAX;
+
     OfflineMixRender(int32_t sampleRate, int64_t from, int64_t to, int64_t takeStart, int64_t alignment, int transpose,
                      float backingGain, float takeGain);
 
@@ -67,7 +71,7 @@ private:
     bool mBackingEnded = false;
     bool mStarted = false;
 
-    const int64_t mTo;
+    int64_t mTo;
     const int64_t mTakeStart;
     const int64_t mAlignment;
     const int mTranspose;

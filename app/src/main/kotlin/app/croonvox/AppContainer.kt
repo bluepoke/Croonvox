@@ -3,6 +3,7 @@ package app.croonvox
 
 import android.content.Context
 import androidx.work.WorkManager
+import app.croonvox.core.export.ExportBacking
 import app.croonvox.core.library.ImportLocalFile
 import app.croonvox.core.library.Library
 import app.croonvox.core.library.LookUpSharedLink
@@ -38,8 +39,8 @@ import app.croonvox.data.RoomTakeRepository
 import app.croonvox.data.RoomTrackRepository
 import app.croonvox.data.export.MediaStoreExports
 import app.croonvox.downloading.HttpMediaDownloader
+import app.croonvox.engine.NativeOfflineRenderer
 import app.croonvox.engine.OboeAudioEngine
-import app.croonvox.engine.OfflineMixRenderer
 import app.croonvox.importing.Importer
 import app.croonvox.importing.LinkImporter
 import app.croonvox.importing.PendingImport
@@ -85,9 +86,14 @@ class AppContainer(private val context: Context) {
 
     // Mixes and their Export (#14, ADR 7, ADR 8).
     val mixes: Mixes by lazy { Mixes(trackRepository, takeRepository, mixRepository, trackFiles, settingsRepository) }
+    private val offlineRenderer by lazy { NativeOfflineRenderer() }
+    private val exportStore by lazy { MediaStoreExports(context.contentResolver) }
     val exportMix: ExportMix by lazy {
-        ExportMix(trackRepository, takeRepository, mixRepository, trackFiles, OfflineMixRenderer(), MediaStoreExports(context.contentResolver))
+        ExportMix(trackRepository, takeRepository, mixRepository, trackFiles, offlineRenderer, exportStore)
     }
+
+    // Backing Export (#24).
+    val exportBacking: ExportBacking by lazy { ExportBacking(trackRepository, trackFiles, offlineRenderer, exportStore) }
     val importer: Importer by lazy { Importer(appScope, importLocalFile, trackFiles, context.contentResolver) }
 
     // Separation (ADR 3, ADR 15): models are downloaded into app storage on first use.

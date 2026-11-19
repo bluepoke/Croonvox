@@ -3,6 +3,9 @@ package app.croonvox.ui.session
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.croonvox.core.export.BackingExportOptions
+import app.croonvox.core.export.BackingExportUnavailable
+import app.croonvox.core.export.ExportBacking
 import app.croonvox.core.library.TrackRepository
 import app.croonvox.core.lyrics.LyricsOffset
 import app.croonvox.core.lyrics.LyricsRepository
@@ -67,6 +70,7 @@ class SessionViewModel(
     private val choices: ModelChoices,
     private val mixes: Mixes,
     private val exportMix: ExportMix,
+    private val exportBacking: ExportBacking,
 ) : ViewModel() {
     /** The Track as it is now: Track Pipeline, Vocal-Free, Backing Audio choice. */
     val track: StateFlow<Track?> = tracks.observe(id).stateIn(viewModelScope, SharingStarted.Eagerly, null)
@@ -363,6 +367,67 @@ class SessionViewModel(
         viewModelScope.launch { mixes.delete(mix) }
     }
 
+    // --- Backing Export (#24) ---
+
+    private val _backingExport = MutableStateFlow<BackingExportDialog?>(null)
+
+    /** The Backing Export sheet while it is open. */
+    val backingExport: StateFlow<BackingExportDialog?> = _backingExport
+
+    private var backingExportJob: Job? = null
+
+    /** Opens the Backing Export sheet at the Backing Audio the Track plays and its Last Transpose. */
+    fun openBackingExport() {
+        viewModelScope.launch {
+            val options = exportBacking.options(id)
+            if (options.layers.isEmpty()) return@launch
+            _backingExport.value = BackingExportDialog(options, options.layer, options.transpose)
+        }
+    }
+
+    fun chooseBackingExportLayer(layer: BackingChoice) {
+        _backingExport.update { it?.takeIf { layer in it.options.layers }?.copy(layer = layer) ?: it }
+    }
+
+    /** The Transpose of this export only; the Last Transpose stays. */
+    fun setBackingExportTranspose(transpose: Transpose) {
+        _backingExport.update { it?.copy(transpose = transpose) }
+    }
+
+    /** Exports the chosen layer as WAV to Music/Croonvox. Closing the sheet or leaving the screen cancels it. */
+    fun startBackingExport(bitsPerSample: Int) {
+        val dialog = _backingExport.value ?: return
+        if (dialog.export is ExportProgress.Running) return
+        backingExportJob = viewModelScope.launch {
+            fun show(export: ExportProgress?) = _backingExport.update { it?.copy(export = export) }
+            show(ExportProgress.Running(0f))
+            val result = try {
+                val file = exportBacking.export(id, dialog.layer, dialog.transpose, ExportFormat.Wav(bitsPerSample)) { progress ->
+                    if (isActive) show(ExportProgress.Running(progress))
+                }
+                ExportProgress.Done(file)
+            } catch (e: CancellationException) {
+                show(null)
+                throw e
+            } catch (e: BackingExportUnavailable) {
+                ExportProgress.Failed(e.reason)
+            } catch (e: Exception) {
+                ExportProgress.Failed(e.message ?: e::class.simpleName.orEmpty())
+            }
+            show(result)
+        }
+    }
+
+    fun cancelBackingExport() {
+        backingExportJob?.cancel()
+        backingExportJob = null
+    }
+
+    fun closeBackingExport() {
+        cancelBackingExport()
+        _backingExport.value = null
+    }
+
     override fun onCleared() {
         // Does nothing if the next Track's Session has closed it already.
         session.value?.close()
@@ -372,7 +437,15 @@ class SessionViewModel(
 /** The Mix Editor: the Mix, the Mix Settings being edited, and its Export, if one was started. */
 data class MixEditor(val mix: MixId, val settings: MixSettings, val export: ExportProgress? = null)
 
-/** Where an Export from the Mix Editor is. */
+/** The Backing Export sheet: what it offers, the layer and Transpose chosen, and its Export, if started. */
+data class BackingExportDialog(
+    val options: BackingExportOptions,
+    val layer: BackingChoice,
+    val transpose: Transpose,
+    val export: ExportProgress? = null,
+)
+
+/** Where an Export from the Mix Editor or the Backing Export sheet is. */
 sealed interface ExportProgress {
     data class Running(val progress: Float) : ExportProgress
 

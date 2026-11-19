@@ -78,6 +78,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import app.croonvox.core.export.ExportBacking
 import app.croonvox.core.library.TrackRepository
 import app.croonvox.core.lyrics.Lrc
 import app.croonvox.core.lyrics.LyricsOffset
@@ -140,11 +141,12 @@ fun SessionRoute(
     choices: ModelChoices,
     mixes: Mixes,
     exportMix: ExportMix,
+    exportBacking: ExportBacking,
     onChooseLyrics: () -> Unit,
 ) {
     val viewModel: SessionViewModel = viewModel(
         factory = viewModelFactory {
-            initializer { SessionViewModel(id, tracks, sessions, pipeline, lyrics, match, lyricsOffset, vocalFreeToggle, choices, mixes, exportMix) }
+            initializer { SessionViewModel(id, tracks, sessions, pipeline, lyrics, match, lyricsOffset, vocalFreeToggle, choices, mixes, exportMix, exportBacking) }
         },
     )
     val context = LocalContext.current
@@ -204,6 +206,21 @@ fun SessionRoute(
     val karaoke by viewModel.karaoke.collectAsStateWithLifecycle()
     val transpose by viewModel.transpose.collectAsStateWithLifecycle()
     val mixes by viewModel.trackMixes.collectAsStateWithLifecycle()
+    val backingExport by viewModel.backingExport.collectAsStateWithLifecycle()
+    backingExport?.let { dialog ->
+        track?.let { shown ->
+            BackingExportSheet(
+                dialog, shown,
+                BackingExportActions(
+                    onLayer = viewModel::chooseBackingExportLayer,
+                    onTranspose = viewModel::setBackingExportTranspose,
+                    onExport = viewModel::startBackingExport,
+                    onCancelExport = viewModel::cancelBackingExport,
+                    onClose = viewModel::closeBackingExport,
+                ),
+            )
+        }
+    }
     val editor by viewModel.editor.collectAsStateWithLifecycle()
     editor?.let { open ->
         val mix = mixes.firstOrNull { it.id == open.mix }
@@ -262,6 +279,7 @@ fun SessionRoute(
             onNewMix = viewModel::newMix,
             onEditMix = viewModel::editMix,
             onDeleteMix = viewModel::deleteMix,
+            onBackingExport = viewModel::openBackingExport,
         ),
     )
 }
@@ -359,6 +377,7 @@ data class SessionActions(
     val onNewMix: (TakeId) -> Unit = {},
     val onEditMix: (Mix) -> Unit = {},
     val onDeleteMix: (MixId) -> Unit = {},
+    val onBackingExport: () -> Unit = {},
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -476,6 +495,8 @@ private fun SessionControls(openError: String?, content: SessionContent, actions
             MixesSection(content.mixes, content.takes, actions.onEditMix, actions.onDeleteMix)
         }
     }
+    // A Backing Export needs only the Original Audio (#24), not an open Session.
+    if (track.hasOriginalAudio) BackingExportRow(actions.onBackingExport)
     VocalFreeToggle(track.vocalFree, actions.onVocalFree)
 }
 

@@ -4,11 +4,15 @@ package app.croonvox.core.port
 /** Where Exports go: `Music/Croonvox/`, from where they can be shared (ADR 8). */
 interface ExportStore {
     /**
-     * Starts a new file named after [title] that will hold [frames] stereo frames at [sampleRate]
-     * in [format]. It stays hidden from other apps until [ExportWriter.commit].
+     * Starts a new file named after [tags]' title that will hold stereo frames at [sampleRate] in
+     * [format]: exactly [frames] of them, or as many as are written when that isn't known up front.
+     * It stays hidden from other apps until [ExportWriter.commit].
      */
-    suspend fun create(title: String, format: ExportFormat, sampleRate: Int, frames: Long): ExportWriter
+    suspend fun create(tags: ExportTags, format: ExportFormat, sampleRate: Int, frames: Long?): ExportWriter
 }
+
+/** What an Export is tagged with, and named after. Cover art comes with #15. */
+data class ExportTags(val title: String, val artist: String? = null)
 
 /** One Export being written: the rendered audio, then [commit] or [abort]. */
 interface ExportWriter : PcmSink {

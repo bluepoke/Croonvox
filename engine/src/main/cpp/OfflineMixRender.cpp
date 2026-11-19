@@ -45,6 +45,7 @@ void OfflineMixRender::appendBacking(const float *interleaved, int32_t frames, i
 
 void OfflineMixRender::endBacking() {
     mBackingEnded = true;
+    if (mTo == kUntilEnd) mTo = std::max(mPos, mFed);  // the Backing Audio's length is known now
     renderAvailable();
 }
 
