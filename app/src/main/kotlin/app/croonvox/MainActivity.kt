@@ -28,6 +28,7 @@ import app.croonvox.importing.LinkImporter
 import app.croonvox.importing.PendingImport
 import app.croonvox.importing.UriLocalFile
 import app.croonvox.separation.SeparationCatalogue
+import app.croonvox.ui.NotificationPermissionPrompt
 import app.croonvox.ui.library.LibraryRoute
 import app.croonvox.ui.lyrics.LyricsSearchRoute
 import app.croonvox.ui.models.ImportSheet
@@ -74,6 +75,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 PendingImportSheet()
+                NotificationPermissionPrompt(container.notificationPrompt)
                 NavHost(nav, startDestination = LIBRARY) {
                     composable(LIBRARY) {
                         LibraryRoute(

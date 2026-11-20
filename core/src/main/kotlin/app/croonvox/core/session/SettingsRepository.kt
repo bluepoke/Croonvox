@@ -25,4 +25,9 @@ interface SettingsRepository {
     suspend fun defaultSeparationModel(): SeparationModelId?
 
     suspend fun setDefaultSeparationModel(model: SeparationModelId)
+
+    /** Whether the user was asked for the notification permission (#27); false until asked. See [app.croonvox.core.pipeline.NotificationPrompt]. */
+    suspend fun notificationPermissionAsked(): Boolean
+
+    suspend fun setNotificationPermissionAsked()
 }

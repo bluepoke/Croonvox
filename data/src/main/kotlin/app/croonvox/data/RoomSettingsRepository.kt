@@ -49,6 +49,11 @@ class RoomSettingsRepository(database: CroonvoxDatabase) : SettingsRepository {
     override suspend fun setDefaultSeparationModel(model: SeparationModelId) =
         dao.put(SettingEntity(DEFAULT_SEPARATION_MODEL, model.value))
 
+    override suspend fun notificationPermissionAsked(): Boolean =
+        dao.get(NOTIFICATION_PERMISSION_ASKED)?.toBooleanStrictOrNull() ?: false
+
+    override suspend fun setNotificationPermissionAsked() = dao.put(SettingEntity(NOTIFICATION_PERMISSION_ASKED, true.toString()))
+
     private fun gainKey(device: InputDevice): String = "input_gain_db:" + when (device) {
         InputDevice.BuiltIn -> "built_in"
         InputDevice.Wired -> "wired"
@@ -61,5 +66,6 @@ class RoomSettingsRepository(database: CroonvoxDatabase) : SettingsRepository {
         const val COUNTDOWN = "countdown_enabled"
         const val REVIEW_BACKING = "review_backing_db"
         const val DEFAULT_SEPARATION_MODEL = "default_separation_model"
+        const val NOTIFICATION_PERMISSION_ASKED = "notification_permission_asked"
     }
 }

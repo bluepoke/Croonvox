@@ -21,6 +21,7 @@ import app.croonvox.core.mix.MixRepository
 import app.croonvox.core.mix.Mixes
 import app.croonvox.core.pipeline.DefaultSeparationModel
 import app.croonvox.core.pipeline.DownloadTrack
+import app.croonvox.core.pipeline.NotificationPrompt
 import app.croonvox.core.pipeline.SeparateTrack
 import app.croonvox.core.pipeline.TrackPipeline
 import app.croonvox.core.pipeline.VocalFreeToggle
@@ -115,6 +116,8 @@ class AppContainer(private val context: Context) {
     val trackPipeline: TrackPipeline by lazy {
         TrackPipeline(trackRepository, pipelineJobs, unpickedModel = SeparationCatalogue.default.id, downloadFrom = sources.map { it.id }.toSet())
     }
+    /** Asks for the notification permission once, when the first Track starts Separating (#27). */
+    val notificationPrompt: NotificationPrompt by lazy { NotificationPrompt(trackRepository, settingsRepository) }
 
     // Network Sources (ADR 1): none in the local flavor.
     val sources: List<Source> by lazy { FlavorSources.create() }

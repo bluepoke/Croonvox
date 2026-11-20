@@ -35,4 +35,12 @@ class InMemorySettingsRepository : SettingsRepository {
     override suspend fun setDefaultSeparationModel(model: SeparationModelId) {
         defaultSeparationModel = model
     }
+
+    private var notificationPermissionAsked = false
+
+    override suspend fun notificationPermissionAsked(): Boolean = notificationPermissionAsked
+
+    override suspend fun setNotificationPermissionAsked() {
+        notificationPermissionAsked = true
+    }
 }
