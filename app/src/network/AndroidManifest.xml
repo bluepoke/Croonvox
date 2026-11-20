@@ -5,6 +5,7 @@
     <application>
         <activity
             android:name=".MainActivity"
+            android:exported="true"
             tools:node="merge">
             <!-- Share a link (e.g. a YouTube video) into Croonvox to add it as a Track. -->
             <intent-filter>
