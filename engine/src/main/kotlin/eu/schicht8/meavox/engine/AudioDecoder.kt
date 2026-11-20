@@ -23,6 +23,15 @@ object AudioDecoder {
         fun progress(fraction: Float) {}
     }
 
+    /**
+     * The PCM encoding to ask the decoder of a [mime] track for; null to leave the track's own.
+     * A raw PCM track (on Android 17, MediaExtractor decodes FLAC itself and hands out 16-bit
+     * "audio/raw") goes through a pass-through decoder, for which the encoding describes its
+     * input: asking it for float would declare the samples float without converting them.
+     */
+    internal fun requestedPcmEncoding(mime: String): Int? =
+        if (mime == MediaFormat.MIMETYPE_AUDIO_RAW) null else AudioFormat.ENCODING_PCM_FLOAT
+
     /** Blocking; call off the main thread. Interrupting the thread cancels the decode. */
     fun decode(path: String, sink: Sink) {
         val extractor = MediaExtractor()
@@ -34,7 +43,7 @@ object AudioDecoder {
             extractor.selectTrack(track)
             val format = extractor.getTrackFormat(track)
             val durationUs = if (format.containsKey(MediaFormat.KEY_DURATION)) format.getLong(MediaFormat.KEY_DURATION) else 0L
-            format.setInteger(MediaFormat.KEY_PCM_ENCODING, AudioFormat.ENCODING_PCM_FLOAT)
+            requestedPcmEncoding(format.getString(MediaFormat.KEY_MIME)!!)?.let { format.setInteger(MediaFormat.KEY_PCM_ENCODING, it) }
             val codec = try {
                 MediaCodec.createDecoderByType(format.getString(MediaFormat.KEY_MIME)!!)
             } catch (e: Exception) {
@@ -67,9 +76,8 @@ object AudioDecoder {
         private val info = MediaCodec.BufferInfo()
         private var inputDone = false
         private var outputDone = false
+        private val layout = PcmLayout()
         private var begun = false
-        private var channels = 1
-        private var floatPcm = false
         private var scratch = FloatArray(0)
         private var lastProgress = -1f
 
@@ -111,7 +119,7 @@ object AudioDecoder {
                 wait = 0
                 when {
                     index == MediaCodec.INFO_TRY_AGAIN_LATER -> return drained
-                    index == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> if (!begun) begin(codec.outputFormat)
+                    index == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> onFormat(codec.outputFormat)
                     index >= 0 -> {
                         handle(index)
                         drained = true
@@ -122,31 +130,33 @@ object AudioDecoder {
         }
 
         private fun handle(index: Int) {
-            if (!begun) begin(codec.outputFormat)
+            if (!layout.known) onFormat(codec.outputFormat)
+            // The sink begins with the first buffer, under the format that buffer has: a decoder may
+            // report more than one format before (see [PcmLayout]).
+            if (!begun) {
+                sink.begin(layout.channels, layout.sampleRate, durationUs * layout.sampleRate / 1_000_000)
+                begun = true
+            }
             val buffer = codec.getOutputBuffer(index)!!.order(ByteOrder.nativeOrder())
             buffer.position(info.offset)
             buffer.limit(info.offset + info.size)
-            val samples = if (floatPcm) info.size / 4 else info.size / 2
-            if (scratch.size < samples) scratch = FloatArray(samples)
-            if (floatPcm) {
-                buffer.asFloatBuffer().get(scratch, 0, samples)
-            } else {
-                val shorts = buffer.asShortBuffer()
-                for (i in 0 until samples) scratch[i] = shorts.get(i) / 32768f
-            }
-            if (samples >= channels) sink.append(scratch, samples / channels)
+            val needed = layout.samplesIn(info.size)
+            if (scratch.size < needed) scratch = FloatArray(needed)
+            val samples = layout.read(buffer, scratch)
+            if (samples >= layout.channels) sink.append(scratch, samples / layout.channels)
             codec.releaseOutputBuffer(index, false)
             if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) outputDone = true
             reportProgress()
         }
 
-        private fun begin(outputFormat: MediaFormat) {
-            channels = outputFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
-            floatPcm = outputFormat.containsKey(MediaFormat.KEY_PCM_ENCODING) &&
-                outputFormat.getInteger(MediaFormat.KEY_PCM_ENCODING) == AudioFormat.ENCODING_PCM_FLOAT
-            val rate = outputFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE)
-            sink.begin(channels, rate, durationUs * rate / 1_000_000)
-            begun = true
+        /** Every output format counts, also after the first (see [PcmLayout]). */
+        private fun onFormat(outputFormat: MediaFormat) {
+            val encoding = if (outputFormat.containsKey(MediaFormat.KEY_PCM_ENCODING)) outputFormat.getInteger(MediaFormat.KEY_PCM_ENCODING) else null
+            layout.onFormat(
+                encoding,
+                outputFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT),
+                outputFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE),
+            )
         }
 
         private fun reportProgress() {
