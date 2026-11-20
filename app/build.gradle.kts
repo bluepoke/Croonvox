@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "app.croonvox"
+    namespace = "eu.schicht8.meavox"
     compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {
-        applicationId = "app.croonvox"
+        applicationId = "eu.schicht8.meavox"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.compileSdk.get().toInt()
         versionCode = 1
@@ -25,13 +25,13 @@ android {
     productFlavors {
         create("network") {
             dimension = "distribution"
-            manifestPlaceholders["appLabel"] = "Croonvox"
+            manifestPlaceholders["appLabel"] = "MeaVox"
         }
         create("local") {
             dimension = "distribution"
             applicationIdSuffix = ".local"
             versionNameSuffix = "-local"
-            manifestPlaceholders["appLabel"] = "Croonvox Local"
+            manifestPlaceholders["appLabel"] = "MeaVox Local"
         }
     }
 

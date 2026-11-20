@@ -3,7 +3,7 @@
 Throwaway spike that decides which Separation Models ship ([ADR 3](../adr/0003-on-device-separation-selectable-models.md)). A benchmark screen runs Fast and Best candidates on the device through ONNX Runtime, separates a chosen song in chunks, and writes the Instrumental and Vocal Stem so they can be listened to. The code is in two modules, neither used by the production app:
 
 - `:spikes:separation-core`: pure Kotlin (JVM). STFT, resampler, chunked Separation, the model adapters and the catalogue. Unit-tested on the JVM; opt-in tests run the real models there too.
-- `:spikes:separation`: the Android benchmark screen (application ID `app.croonvox.spike.separation`).
+- `:spikes:separation`: the Android benchmark screen (application ID `eu.schicht8.meavox.spike.separation`).
 
 ## What the spike does
 
@@ -13,7 +13,7 @@ Throwaway spike that decides which Separation Models ship ([ADR 3](../adr/0003-o
 - **Stems:** each model estimates one source, and the other stem is the input minus it, so Instrumental + Vocal Stem = input (as resampled to 44.1 kHz). Spleeter and Demucs estimate the Vocal Stem; UVR Inst models estimate the Instrumental; UVR Karaoke estimates the lead vocal.
 - **Measurements per model:** model load time, separation wall time, real-time factor (separation wall time ÷ song duration; total RTF also includes resampling, load and writing), mean and max time per segment, process RSS (baseline, and peak sampled every 20 ms), frames in vs. out per stem, the **alignment lag** of each stem, and the thermal status before and after. The lag is the cross-correlation peak against the Original Audio over 1 s mid-song (±1024 frames; 0 = aligned), measured on exactly what was written, at the original rate, so resampling back is covered.
 - **What the checks prove:** the length is guaranteed by construction (the pipeline writes exactly the input's frame count, and the unit tests cover this), so the screen shows it only as a sanity check. Only the lag of the stem the model **estimates** is informative: the other stem is input − estimate and lines up almost by construction. Spleeter, Demucs and UVR Karaoke estimate the Vocal Stem; UVR Inst HQ estimates the Instrumental.
-- **Listening:** Play buttons for the original and both stems. Files are in `Android/data/app.croonvox.spike.separation/files/Music/separation/`.
+- **Listening:** Play buttons for the original and both stems. Files are in `Android/data/eu.schicht8.meavox.spike.separation/files/Music/separation/`.
 - **Export:** "Copy results as Markdown" puts the device line and one table row per run on the clipboard (and saves them as `results-<timestamp>.md` next to the stems), ready to paste into the findings below.
 
 ## Candidates
@@ -60,7 +60,7 @@ uv venv --python 3.12 .venv
 uv pip install --python .venv/bin/python numpy onnx onnxruntime onnxscript einops julius pyyaml tqdm omegaconf openunmix dora-search
 uv pip install --python .venv/bin/python --reinstall torch torchaudio --index-url https://download.pytorch.org/whl/cpu   # after openunmix, which pulls the CUDA torchaudio
 uv pip install --python .venv/bin/python --no-deps -e ./demucs-for-onnx
-.venv/bin/python <croonvox>/spikes/separation-core/scripts/convert_demucs.py ./onnx-models   # → htdemucs.onnx, htdemucs_ft_vocals.onnx
+.venv/bin/python <meavox>/spikes/separation-core/scripts/convert_demucs.py ./onnx-models   # → htdemucs.onnx, htdemucs_ft_vocals.onnx
 ```
 
 Demucs also imports `diffq`, which has no wheel and needs a C compiler. It's only used for quantized checkpoints, and neither model is one. Without a compiler, put a stub in the venv's `site-packages/diffq/__init__.py` that defines `DiffQuantizer`, `UniformQuantizer` and `restore_quantized_state` as functions that raise.
@@ -72,7 +72,7 @@ The wrapper prints the tensor shapes and compares ONNX Runtime with PyTorch on t
 **On the device**, push the files (or use **Import htdemucs.onnx** on the screen):
 
 ```sh
-D=/sdcard/Android/data/app.croonvox.spike.separation/files/models
+D=/sdcard/Android/data/eu.schicht8.meavox.spike.separation/files/models
 adb shell mkdir -p $D/htdemucs $D/htdemucs-ft-vocals
 adb push onnx-models/htdemucs.onnx $D/htdemucs/
 adb push onnx-models/htdemucs_ft_vocals.onnx $D/htdemucs-ft-vocals/
@@ -86,10 +86,10 @@ The spike modules are no longer part of the Gradle build. To build this one agai
 
 ```sh
 ./gradlew :spikes:separation:installRelease   # non-debuggable: the Kotlin DSP runs at full speed
-adb pull /sdcard/Android/data/app.croonvox.spike.separation/files/Music/separation/ ./separation-out/
+adb pull /sdcard/Android/data/eu.schicht8.meavox.spike.separation/files/Music/separation/ ./separation-out/
 ```
 
-Models download in the app (Spleeter from sherpa-onnx's GitHub release, UVR from TRvlvr's). To push them instead, put them in `/sdcard/Android/data/app.croonvox.spike.separation/files/models/<id>/` with the file names from the catalogue.
+Models download in the app (Spleeter from sherpa-onnx's GitHub release, UVR from TRvlvr's). To push them instead, put them in `/sdcard/Android/data/eu.schicht8.meavox.spike.separation/files/models/<id>/` with the file names from the catalogue.
 
 Always measure with the **release** build. A debuggable build runs the Kotlin STFT and resampler under the debugger-friendly runtime, which inflates wall time.
 
@@ -103,7 +103,7 @@ Note the device (the screen shows model, SoC, Android version, RAM and cores) an
 4. **Check per run:** frames in = Instrumental = Vocal Stem, and both lags 0. Both are shown in red when not met.
 5. **Listen** to each stem with closed headphones against the original. Rate the Instrumental for karaoke use (1 = vocal clearly audible, 3 = faint vocal ghosts or artifacts, 5 = clean), and note artifacts (warbling, missing cymbals, pumping, backing vocals kept or removed). Also check the segment seams: every 5.9–11.9 s, depending on the model.
 6. **Variations** (on the 3–4 min song, best Fast and best Best candidate only): threads 2 / 4 / 8, XNNPACK, NNAPI, arena off. These show the speed and memory headroom.
-7. **Memory:** RSS a model leaves behind (ART heap, ORT arena) raises the next model's baseline, so for memory figures run **one model per app launch** (`adb shell am force-stop app.croonvox.spike.separation` between models). For the long song, note the peak RSS and whether any model failed with an `OutOfMemoryError` or the app was killed. If the app was killed, add the `adb logcat | grep -i lowmemory` output.
+7. **Memory:** RSS a model leaves behind (ART heap, ORT arena) raises the next model's baseline, so for memory figures run **one model per app launch** (`adb shell am force-stop eu.schicht8.meavox.spike.separation` between models). For the long song, note the peak RSS and whether any model failed with an `OutOfMemoryError` or the app was killed. If the app was killed, add the `adb logcat | grep -i lowmemory` output.
 8. **Copy results as Markdown** and paste the rows below.
 
 **Pass criteria (provisional, for the Fast tier on the weakest target device):** RTF ≤ 1 (a song separates in no more time than it takes to play), peak RSS increase ≤ 1 GB, all lengths equal and lags 0. The Best tier may be slower (it runs as a resumable background job, ADR 3), but should stay below RTF 5 with the same memory bound.

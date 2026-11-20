@@ -3,7 +3,7 @@
 
 #include <algorithm>
 
-namespace croonvox {
+namespace meavox {
 
 namespace {
 constexpr float kTonalityLimitHz = 8000.0f;  // Transpose: keep tonal treatment below this (as in spike #2)
@@ -155,4 +155,4 @@ void clipOutput(float *out, int32_t numFrames) {
     for (int32_t i = 0; i < numFrames * 2; ++i) out[i] = std::clamp(out[i], -1.0f, 1.0f);
 }
 
-}  // namespace croonvox
+}  // namespace meavox

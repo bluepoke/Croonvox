@@ -4,7 +4,7 @@
 
 ### Issue tracker
 
-Issues and specs are tracked as GitHub issues in `bluepoke/Croonvox` (via the `gh` CLI). See `docs/agents/issue-tracker.md`.
+Issues and specs are tracked as GitHub issues in `bluepoke/MeaVox` (via the `gh` CLI). See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 

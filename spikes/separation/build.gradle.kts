@@ -6,11 +6,11 @@ plugins {
 }
 
 android {
-    namespace = "app.croonvox.spike.separation.app"
+    namespace = "eu.schicht8.meavox.spike.separation.app"
     compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {
-        applicationId = "app.croonvox.spike.separation"
+        applicationId = "eu.schicht8.meavox.spike.separation"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.compileSdk.get().toInt()
         versionCode = 1

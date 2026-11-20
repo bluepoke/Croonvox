@@ -9,12 +9,12 @@
 #include <cmath>
 #include <thread>
 
-#define LOG_TAG "CroonvoxEngine"
+#define LOG_TAG "MeaVoxEngine"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 #define LOGW(...) __android_log_print(ANDROID_LOG_WARN, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
-namespace croonvox {
+namespace meavox {
 
 namespace {
 constexpr int64_t kMaxBlocksWithoutEstimate = 4096;  // ~100 min at 44.1 kHz
@@ -609,4 +609,4 @@ oboe::DataCallbackResult PlaybackEngine::onAudioReady(oboe::AudioStream *, void 
     return oboe::DataCallbackResult::Continue;
 }
 
-}  // namespace croonvox
+}  // namespace meavox

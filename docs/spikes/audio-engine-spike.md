@@ -1,6 +1,6 @@
 # Spike: Audio Engine (ticket #2)
 
-Throwaway spike that tests the Audio Engine design from [ADR 4](../adr/0004-native-oboe-audio-engine.md) and [ADR 5](../adr/0005-transpose-signalsmith-realtime.md) on real hardware, before the production engine is built. The code lives in the `:spikes:audio-engine` module (application ID `app.croonvox.spike.audio`) and is **not** used by the production app.
+Throwaway spike that tests the Audio Engine design from [ADR 4](../adr/0004-native-oboe-audio-engine.md) and [ADR 5](../adr/0005-transpose-signalsmith-realtime.md) on real hardware, before the production engine is built. The code lives in the `:spikes:audio-engine` module (application ID `eu.schicht8.meavox.spike.audio`) and is **not** used by the production app.
 
 ## What the spike does
 
@@ -11,7 +11,7 @@ Throwaway spike that tests the Audio Engine design from [ADR 4](../adr/0004-nati
 - **Latency Calibration**: 8 click bursts (4 ms, about 4 kHz) are played and detected in the input. The median offset in frames is stored per output route kind and sample rate, and applied to Review and to the alignment WAV. Before calibration, the app uses Oboe's reported input + output latency.
 - **Monitoring**: dry mic added to the output with adjustable gain. It's available only on wired or USB routes, and disabled with an explanation on Bluetooth and the speaker.
 - **Route changes**: when an output device is added or removed, or a stream disconnects, the app closes and reopens both streams. The transport stops, the Take is discarded (it belongs to the old route and maybe the old sample rate), the last measurement is cleared, and Monitoring is forced off. A stream that reports no device id is treated as the route kind *Other* rather than guessed.
-- **Alignment WAV**: a stereo 16-bit file with the Backing Audio on the left and the compensated Take on the right, saved to `Android/data/app.croonvox.spike.audio/files/Music/`.
+- **Alignment WAV**: a stereo 16-bit file with the Backing Audio on the left and the compensated Take on the right, saved to `Android/data/eu.schicht8.meavox.spike.audio/files/Music/`.
 
 ## Build and install
 
@@ -20,9 +20,9 @@ The spike modules are no longer part of the Gradle build. To build this one agai
 ```sh
 ./gradlew :spikes:audio-engine:installDebug
 # pull alignment WAVs
-adb pull /sdcard/Android/data/app.croonvox.spike.audio/files/Music/ ./spike-wavs/
+adb pull /sdcard/Android/data/eu.schicht8.meavox.spike.audio/files/Music/ ./spike-wavs/
 # engine log
-adb logcat -s CroonvoxSpike
+adb logcat -s MeaVoxSpike
 ```
 
 ## Measurement protocol
@@ -63,7 +63,7 @@ Run every step for each **device × route** you care about. Routes: built-in spe
 3. Tap **Review** and listen: the recorded clicks should sit on the played clicks.
 4. **Save alignment WAV**, pull it, and analyse it:
    ```sh
-   adb pull /sdcard/Android/data/app.croonvox.spike.audio/files/Music/ ./spike-wavs/
+   adb pull /sdcard/Android/data/eu.schicht8.meavox.spike.audio/files/Music/ ./spike-wavs/
    python3 spikes/audio-engine/tools/analyze_alignment.py spike-wavs/Music/alignment-wired-<timestamp>.wav
    ```
    The script pairs every click (left channel) with the nearest recorded click or clap (right channel) and prints the **mean offset** (positive = Take is late), any **steps** (sudden jumps such as a burst lost in an xrun), and the **drift over 20 s** (a linear fit of the offsets over time, between steps). Add `-v` to list every pair.

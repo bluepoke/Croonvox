@@ -135,7 +135,7 @@ fabric.properties
 
 # End of https://www.toptal.com/developers/gitignore/api/androidstudio
 
-### Croonvox ###
+### MeaVox ###
 .cxx/
 .kotlin/
 /spike-wavs/

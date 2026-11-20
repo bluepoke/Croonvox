@@ -36,7 +36,7 @@
 
 #include "BackingRenderer.h"
 
-namespace croonvox {
+namespace meavox {
 
 enum class Transport : int32_t {
     Idle = 0,
@@ -209,4 +209,4 @@ private:
     std::atomic<int64_t> mXRunCorrection{0};
 };
 
-}  // namespace croonvox
+}  // namespace meavox

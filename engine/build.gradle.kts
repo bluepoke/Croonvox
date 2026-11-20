@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "app.croonvox.engine"
+    namespace = "eu.schicht8.meavox.engine"
     compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {

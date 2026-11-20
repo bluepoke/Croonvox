@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// JNI surface for app.croonvox.engine.NativeMixRender: one owned OfflineMixRender per handle.
+// JNI surface for eu.schicht8.meavox.engine.NativeMixRender: one owned OfflineMixRender per handle.
 #include <jni.h>
 
 #include "OfflineMixRender.h"
 
-using croonvox::OfflineMixRender;
+using meavox::OfflineMixRender;
 
 namespace {
 
@@ -21,7 +21,7 @@ void withSamples(JNIEnv *env, jfloatArray data, Use use) {
 
 }  // namespace
 
-#define JNI_FN(ret, name) extern "C" JNIEXPORT ret JNICALL Java_app_croonvox_engine_NativeMixRender_##name
+#define JNI_FN(ret, name) extern "C" JNIEXPORT ret JNICALL Java_eu_schicht8_meavox_engine_NativeMixRender_##name
 
 JNI_FN(jlong, create)(JNIEnv *, jobject, jint sampleRate, jlong from, jlong to, jlong takeStart, jlong alignment,
                       jint transpose, jfloat backingGain, jfloat takeGain) {

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// Throwaway spike of the Croonvox Audio Engine (ticket #2, ADR 4, ADR 5).
+// Throwaway spike of the MeaVox Audio Engine (ticket #2, ADR 4, ADR 5).
 //
 // One full-duplex Oboe stream pair owns a single sample-accurate timeline:
 //   - Backing Audio playback through Signalsmith Stretch (live Transpose)
@@ -26,7 +26,7 @@
 
 #include "signalsmith-stretch/signalsmith-stretch.h"
 
-namespace croonvox::spike {
+namespace meavox::spike {
 
 enum class State : int32_t {
     Idle = 0,
@@ -184,4 +184,4 @@ private:
     std::atomic<float> mInputPeak{0.0f};
 };
 
-}  // namespace croonvox::spike
+}  // namespace meavox::spike

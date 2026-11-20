@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 <resources>
-    <!-- Android 12+ splash: the launcher icon on Croonvox black instead of the system default. -->
-    <style name="Theme.Croonvox" parent="@android:style/Theme.DeviceDefault.NoActionBar">
-        <item name="android:windowBackground">@color/croonvox_bg</item>
-        <item name="android:colorAccent">@color/croonvox_gold</item>
+    <!-- Android 12+ splash: the launcher icon on MeaVox black instead of the system default. -->
+    <style name="Theme.MeaVox" parent="@android:style/Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowBackground">@color/meavox_bg</item>
+        <item name="android:colorAccent">@color/meavox_gold</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowLightNavigationBar">false</item>
-        <item name="android:windowSplashScreenBackground">@color/croonvox_bg</item>
+        <item name="android:windowSplashScreenBackground">@color/meavox_bg</item>
     </style>
 </resources>

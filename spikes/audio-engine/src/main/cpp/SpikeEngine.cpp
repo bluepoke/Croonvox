@@ -10,12 +10,12 @@
 
 #include "WavWriter.h"
 
-#define LOG_TAG "CroonvoxSpike"
+#define LOG_TAG "MeaVoxSpike"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 #define LOGW(...) __android_log_print(ANDROID_LOG_WARN, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
-namespace croonvox::spike {
+namespace meavox::spike {
 
 namespace {
 
@@ -638,4 +638,4 @@ bool SpikeEngine::saveAlignmentWav(const std::string &path) {
     return writeWav16(path, interleaved.data(), length, 2, mSampleRate);
 }
 
-}  // namespace croonvox::spike
+}  // namespace meavox::spike

@@ -3,7 +3,7 @@
 
 #include <algorithm>
 
-namespace croonvox {
+namespace meavox {
 
 OfflineMixRender::OfflineMixRender(int32_t sampleRate, int64_t from, int64_t to, int64_t takeStart, int64_t alignment,
                                    int transpose, float backingGain, float takeGain)
@@ -82,4 +82,4 @@ int32_t OfflineMixRender::drain(float *out, int32_t maxFrames) {
     return n;
 }
 
-}  // namespace croonvox
+}  // namespace meavox

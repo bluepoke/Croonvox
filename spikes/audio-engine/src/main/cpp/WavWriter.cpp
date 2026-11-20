@@ -6,7 +6,7 @@
 #include <cstdio>
 #include <vector>
 
-namespace croonvox::spike {
+namespace meavox::spike {
 
 namespace {
 
@@ -61,4 +61,4 @@ bool writeWav16(const std::string &path, const float *interleaved, int64_t frame
     return ok && closed;
 }
 
-}  // namespace croonvox::spike
+}  // namespace meavox::spike

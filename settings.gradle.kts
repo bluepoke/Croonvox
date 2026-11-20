@@ -21,7 +21,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "croonvox"
+rootProject.name = "meavox"
 
 include(":app")
 include(":core")

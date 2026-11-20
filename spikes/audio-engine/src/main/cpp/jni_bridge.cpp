@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// JNI surface for app.croonvox.spike.audio.NativeEngine. One process-wide engine instance.
+// JNI surface for eu.schicht8.meavox.spike.audio.NativeEngine. One process-wide engine instance.
 #include <jni.h>
 
 #include <string>
 
 #include "SpikeEngine.h"
 
-using croonvox::spike::SpikeEngine;
+using meavox::spike::SpikeEngine;
 
 namespace {
 
@@ -18,7 +18,7 @@ SpikeEngine &engine() {
 }  // namespace
 
 #define JNI_FN(ret, name) \
-    extern "C" JNIEXPORT ret JNICALL Java_app_croonvox_spike_audio_NativeEngine_##name
+    extern "C" JNIEXPORT ret JNICALL Java_eu_schicht8_meavox_spike_audio_NativeEngine_##name
 
 JNI_FN(jint, nativeOpen)(JNIEnv *, jobject) { return static_cast<jint>(engine().open()); }
 

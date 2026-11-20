@@ -7,7 +7,7 @@
             android:name=".MainActivity"
             android:exported="true"
             tools:node="merge">
-            <!-- Share a link (e.g. a YouTube video) into Croonvox to add it as a Track. -->
+            <!-- Share a link (e.g. a YouTube video) into MeaVox to add it as a Track. -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />

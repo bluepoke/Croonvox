@@ -1,4 +1,4 @@
-# Croonvox
+# MeaVox
 
 An Android karaoke and singing-practice app. Find a music video, remove the vocals, sing over the instrumental with the lyrics on screen, and export your performance.
 
@@ -13,7 +13,7 @@ An Android karaoke and singing-practice app. Find a music video, remove the voca
 - **Transpose**: shift the key by ±6 semitones without changing the tempo, in real time.
 - **Lyrics**: fetched from [LRCLIB](https://lrclib.net), shown as pages or karaoke-style synced lines. Includes an offset adjustment and a tap-to-sync editor.
 - **Takes and mixing**: record many takes per song and mix them non-destructively, with levels, alignment nudge, a guide vocal and vocal effects (reverb, compression, high-pass).
-- **Export**: WAV, MP3 or M4A/AAC with tags, saved to `Music/Croonvox/` or shared.
+- **Export**: WAV, MP3 or M4A/AAC with tags, saved to `Music/MeaVox/` or shared.
 
 ## Architecture at a glance
 
@@ -75,7 +75,7 @@ Target platform: Android 10+ (minSdk 29), `arm64-v8a` (plus `x86_64` for the emu
 
 ## Distribution
 
-Croonvox is distributed outside the Google Play Store (GitHub releases / F-Droid), because extracting audio from streaming platforms conflicts with Play policies. You are responsible for complying with the terms of the platforms you use and with copyright law.
+MeaVox is distributed outside the Google Play Store (GitHub releases / F-Droid), because extracting audio from streaming platforms conflicts with Play policies. You are responsible for complying with the terms of the platforms you use and with copyright law.
 
 ## License
 

@@ -8,7 +8,7 @@ plugins {
 }
 
 android {
-    namespace = "app.croonvox.data"
+    namespace = "eu.schicht8.meavox.data"
     compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {

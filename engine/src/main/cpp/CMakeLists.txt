@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 cmake_minimum_required(VERSION 3.24)
-project(croonvox_engine LANGUAGES C CXX)
+project(meavox_engine LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -42,7 +42,7 @@ FetchContent_MakeAvailable(flac)
 # Oboe via prefab: low-latency full-duplex audio (ADR 4).
 find_package(oboe REQUIRED CONFIG)
 
-add_library(croonvox_engine SHARED
+add_library(meavox_engine SHARED
         BackingRenderer.cpp
         PlaybackEngine.cpp
         OfflineMixRender.cpp
@@ -51,7 +51,7 @@ add_library(croonvox_engine SHARED
         flac_files.cpp
 )
 
-target_link_libraries(croonvox_engine PRIVATE oboe::oboe signalsmith-stretch FLAC log android)
+target_link_libraries(meavox_engine PRIVATE oboe::oboe signalsmith-stretch FLAC log android)
 
 # Signalsmith Stretch is ~10x slower unoptimised; keep DSP optimised even in debug builds.
-target_compile_options(croonvox_engine PRIVATE -O2 -Wall -Wextra -Wno-unused-parameter)
+target_compile_options(meavox_engine PRIVATE -O2 -Wall -Wextra -Wno-unused-parameter)

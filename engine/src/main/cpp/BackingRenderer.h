@@ -16,7 +16,7 @@
 
 #include "signalsmith-stretch/signalsmith-stretch.h"
 
-namespace croonvox {
+namespace meavox {
 
 constexpr int kMaxTranspose = 6;  // ADR 5: −6…+6 semitones
 
@@ -73,4 +73,4 @@ void mixTake(float *out, int32_t numFrames, int64_t firstFrame, int64_t takeStar
 // Clips interleaved stereo output to full scale.
 void clipOutput(float *out, int32_t numFrames);
 
-}  // namespace croonvox
+}  // namespace meavox

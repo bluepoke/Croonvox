@@ -4,7 +4,7 @@
 - Date: 2026-11-14
 
 ## Context
-Croonvox has to find music videos on several platforms and get their audio out. Platform terms (YouTube in particular) forbid downloading streams, and the Play Store rejects apps that do it. Extractor libraries break whenever a platform changes something.
+MeaVox has to find music videos on several platforms and get their audio out. Platform terms (YouTube in particular) forbid downloading streams, and the Play Store rejects apps that do it. Extractor libraries break whenever a platform changes something.
 
 ## Decision
 - Define a `Source` abstraction from the start: *search → candidates → resolve to a stream/file*.

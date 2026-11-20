@@ -2,6 +2,6 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 <resources>
     <!-- Window and splash only; Compose reads its colours from ui/theme/Color.kt. -->
-    <color name="croonvox_bg">#FF09090B</color>
-    <color name="croonvox_gold">#FFE8B93E</color>
+    <color name="meavox_bg">#FF09090B</color>
+    <color name="meavox_gold">#FFE8B93E</color>
 </resources>

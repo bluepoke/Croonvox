@@ -6,11 +6,11 @@ plugins {
 }
 
 android {
-    namespace = "app.croonvox.spike.audio"
+    namespace = "eu.schicht8.meavox.spike.audio"
     compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {
-        applicationId = "app.croonvox.spike.audio"
+        applicationId = "eu.schicht8.meavox.spike.audio"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.compileSdk.get().toInt()
         versionCode = 1

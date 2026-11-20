@@ -2,6 +2,7 @@
 
 - Status: Accepted, amended by [ADR 18](0018-video-streaming-only-backlog.md) (no offline video; video is streaming only)
 - Date: 2026-11-14
+- Note: the export folder follows the app name and changed with the rename to MeaVox ([#40](https://github.com/bluepoke/MeaVox/issues/40)); exports made before stay in the old folder.
 
 ## Decision
 **Internal storage (app-private, per Track):**
@@ -16,7 +17,7 @@
 - **WAV**: 16-bit PCM (24-bit optional).
 - **MP3**: via **LAME** (LGPL) through the NDK. Default VBR V2, with 320 kbps CBR optional. Tagged with **ID3** (title, artist "feat. <singer>", cover art from the thumbnail).
 - **M4A/AAC**: via the platform **MediaCodec** encoder, with MP4 metadata tags.
-- Output goes to **MediaStore** `Music/Croonvox/`, and can also be shared through the Android share sheet.
+- Output goes to **MediaStore** `Music/MeaVox/`, and can also be shared through the Android share sheet.
 
 ## Note: Take sample rate (#8)
 The Session timeline runs at the **loaded Backing Audio's sample rate**, not the device's native rate. The Audio Engine opens its streams at that rate and Oboe resamples to and from the device, so a band-limited resampler doesn't have to live in the app. Takes are therefore stored at the Backing Audio's rate, usually 44.1 or 48 kHz. Separation keeps stems sample-aligned with the Original Audio, at the same rate, so a Take fits both the Original Audio and the Instrumental. Takes are written as 24-bit FLAC through libFLAC.

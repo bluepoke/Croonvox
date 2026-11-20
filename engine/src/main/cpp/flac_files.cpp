@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// JNI surface for app.croonvox.engine.FlacFiles: streaming 24-bit FLAC files of float PCM with any
+// JNI surface for eu.schicht8.meavox.engine.FlacFiles: streaming 24-bit FLAC files of float PCM with any
 // channel count libFLAC supports (1..8), for the stems and Separation checkpoints (ADR 8, ADR 15).
 #include <jni.h>
 
@@ -13,7 +13,7 @@
 #include <string>
 #include <vector>
 
-#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "CroonvoxFlac", __VA_ARGS__)
+#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "MeaVoxFlac", __VA_ARGS__)
 
 namespace {
 
@@ -69,7 +69,7 @@ void onError(const FLAC__StreamDecoder *, FLAC__StreamDecoderErrorStatus status,
 
 }  // namespace
 
-#define JNI_FN(ret, name) extern "C" JNIEXPORT ret JNICALL Java_app_croonvox_engine_FlacFiles_##name
+#define JNI_FN(ret, name) extern "C" JNIEXPORT ret JNICALL Java_eu_schicht8_meavox_engine_FlacFiles_##name
 
 JNI_FN(jlong, openWriter)(JNIEnv *env, jobject, jstring path, jint channels, jint sampleRate) {
     FLAC__StreamEncoder *encoder = FLAC__stream_encoder_new();

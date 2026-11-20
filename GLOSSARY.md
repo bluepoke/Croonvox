@@ -1,4 +1,4 @@
-# Croonvox — Domain Glossary
+# MeaVox — Domain Glossary
 
 Ubiquitous language for the project. Decisions are recorded in `docs/adr/`.
 
@@ -43,7 +43,7 @@ Ubiquitous language for the project. Decisions are recorded in `docs/adr/`.
 | **Mix Editor** | Where one Mix's Backing Audio and Mix Settings are changed, heard in a Mix Preview and exported. _Avoid_: mixer. |
 | **Mix Preview** | A Mix played in the Session as it will be exported, from its Take's Start Position until the Take ends; changes to its Mix Settings are heard at once. _Avoid_: mix playback. |
 | **Offline Render** | The Audio Engine turning a Mix (or, for a Backing Export, the Backing Audio alone) into audio faster than real time, with the same processing as Review and the Mix Preview, so an Export sounds like them. See ADR 7. _Avoid_: bounce, mixdown. |
-| **Export** | Rendering a Mix, or a Track's Backing Audio alone (Backing Export), to WAV, MP3 or M4A/AAC in `Music/Croonvox/` or via share sheet. See ADR 8. |
+| **Export** | Rendering a Mix, or a Track's Backing Audio alone (Backing Export), to WAV, MP3 or M4A/AAC in `Music/MeaVox/` or via share sheet. See ADR 8. |
 | **Backing Export** | An Export of a Track's Backing Audio (Instrumental or Original Audio) alone at a chosen Transpose, with no Take, e.g. as a backing track for a live performance. _Avoid_: karaoke track, instrumental export. |
 
 ## Open questions

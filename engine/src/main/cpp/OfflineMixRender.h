@@ -16,7 +16,7 @@
 
 #include "BackingRenderer.h"
 
-namespace croonvox {
+namespace meavox {
 
 class OfflineMixRender {
 public:
@@ -84,4 +84,4 @@ private:
     size_t mOutputRead = 0;      // samples of mOutput already drained
 };
 
-}  // namespace croonvox
+}  // namespace meavox

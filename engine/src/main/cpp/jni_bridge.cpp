@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// JNI surface for app.croonvox.engine.NativePlayback. Each engine is an owned native handle.
+// JNI surface for eu.schicht8.meavox.engine.NativePlayback. Each engine is an owned native handle.
 #include <jni.h>
 
 #include <string>
 
 #include "PlaybackEngine.h"
 
-using croonvox::PlaybackEngine;
+using meavox::PlaybackEngine;
 
 namespace {
 
@@ -30,7 +30,7 @@ void withSamples(JNIEnv *env, jfloatArray data, Use use) {
 
 }  // namespace
 
-#define JNI_FN(ret, name) extern "C" JNIEXPORT ret JNICALL Java_app_croonvox_engine_NativePlayback_##name
+#define JNI_FN(ret, name) extern "C" JNIEXPORT ret JNICALL Java_eu_schicht8_meavox_engine_NativePlayback_##name
 
 // Never deleted: lives as long as the process (see PlaybackEngine.h).
 JNI_FN(jlong, create)(JNIEnv *, jobject) { return reinterpret_cast<jlong>(new PlaybackEngine()); }
