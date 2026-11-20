@@ -82,6 +82,8 @@ On the 3.7 GB tablet, lmkd killed the app before the first segment finished (see
 
 ## Build and install
 
+The spike modules are no longer part of the Gradle build. To build this one again, or to run the `:spikes:separation-core` tests, add `include(":spikes:separation-core")` and `include(":spikes:separation")` back to `settings.gradle.kts`.
+
 ```sh
 ./gradlew :spikes:separation:installRelease   # non-debuggable: the Kotlin DSP runs at full speed
 adb pull /sdcard/Android/data/app.croonvox.spike.separation/files/Music/separation/ ./separation-out/

@@ -30,8 +30,3 @@ include(":engine")
 include(":separation")
 include(":lyrics")
 include(":newpipe")
-
-// Throwaway spikes (not shipped).
-include(":spikes:audio-engine")
-include(":spikes:separation-core")
-include(":spikes:separation")

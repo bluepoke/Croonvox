@@ -15,6 +15,8 @@ Throwaway spike that tests the Audio Engine design from [ADR 4](../adr/0004-nati
 
 ## Build and install
 
+The spike modules are no longer part of the Gradle build. To build this one again, add `include(":spikes:audio-engine")` back to `settings.gradle.kts`.
+
 ```sh
 ./gradlew :spikes:audio-engine:installDebug
 # pull alignment WAVs
